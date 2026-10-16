@@ -1,6 +1,6 @@
 jest.mock('../persistence/kvStorage', () => require('../persistence/__mocks__/kvStorage'));
 
-import { FORMAT_PRESETS, migratePlaybackSettings, playbackSettingsStore } from '../playbackSettingsStore';
+import { FORMAT_PRESETS, migratePlaybackSettings, normalizePlaybackRate, playbackSettingsStore } from '../playbackSettingsStore';
 
 beforeEach(() => {
   playbackSettingsStore.setState({
@@ -45,6 +45,18 @@ describe('playbackSettingsStore', () => {
   it('setRepeatMode updates repeat mode', () => {
     playbackSettingsStore.getState().setRepeatMode('all');
     expect(playbackSettingsStore.getState().repeatMode).toBe('all');
+  });
+
+  it('setPlaybackRatePresets replaces the presets', () => {
+    playbackSettingsStore.getState().setPlaybackRatePresets([1, 1.1, 1.2]);
+    expect(playbackSettingsStore.getState().playbackRatePresets).toEqual([1, 1.1, 1.2]);
+  });
+
+  it('normalizePlaybackRate clamps and rounds to the step', () => {
+    expect(normalizePlaybackRate(0.1)).toBe(0.25);
+    expect(normalizePlaybackRate(9)).toBe(3);
+    expect(normalizePlaybackRate(1.3000000000000003)).toBe(1.3);
+    expect(normalizePlaybackRate(1.04)).toBe(1.05);
   });
 
   it('setPlaybackRate updates rate', () => {

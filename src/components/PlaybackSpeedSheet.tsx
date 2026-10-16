@@ -2,16 +2,16 @@
  * PlaybackSpeedSheet — bottom-sheet picker for playback speed + a pitch
  * correction selector, opened from the player's PlaybackRateButton.
  *
- * Speed: every supported rate (slowest → fastest) as a wrapping grid of pills
- * so all options stay visible at once; the current rate is highlighted and
- * tapping another applies it immediately (the sheet stays open so the user can
- * keep adjusting).
+ * Speed: a −/+ stepper and slider set any rate in real time; the editable
+ * preset pills below apply on tap and are replaced with the current rate on
+ * long-press. The sheet stays open so the user can keep adjusting.
  *
  * Pitch correction (None / Voice / Music): only effective at rate != 1x
  * (RNQP auto-bypasses at 1x). None follows the rate; Voice/Music preserve pitch.
  */
 
 import { memo, useCallback } from 'react';
+import Slider from '@react-native-community/slider';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -19,8 +19,11 @@ import { BottomSheet } from './BottomSheet';
 import { useTheme } from '../hooks/useTheme';
 import { applyPitchCorrection, applyPlaybackRate } from '../services/playerService';
 import {
+  MAX_PLAYBACK_RATE,
+  MIN_PLAYBACK_RATE,
+  normalizePlaybackRate,
   PITCH_CORRECTION_MODES,
-  PLAYBACK_RATES,
+  PLAYBACK_RATE_STEP,
   playbackSettingsStore,
   type PitchCorrection,
   type PlaybackRate,
@@ -49,11 +52,30 @@ export const PlaybackSpeedSheet = memo(function PlaybackSpeedSheet({ visible, on
   const { colors } = useTheme();
   const { t } = useTranslation();
   const playbackRate = playbackSettingsStore((s) => s.playbackRate);
+  const playbackRatePresets = playbackSettingsStore((s) => s.playbackRatePresets);
   const pitchCorrection = playbackSettingsStore((s) => s.pitchCorrection);
 
   const handleSelectRate = useCallback((rate: PlaybackRate) => {
     selectionAsync();
     void applyPlaybackRate(rate);
+  }, []);
+
+  const handleSliderChange = useCallback((value: number) => {
+    const rate = normalizePlaybackRate(value);
+    if (rate !== playbackSettingsStore.getState().playbackRate) void applyPlaybackRate(rate);
+  }, []);
+
+  const handleStep = useCallback((delta: number) => {
+    selectionAsync();
+    const current = playbackSettingsStore.getState().playbackRate;
+    void applyPlaybackRate(normalizePlaybackRate(current + delta));
+  }, []);
+
+  const handleSavePreset = useCallback((index: number) => {
+    selectionAsync();
+    const { playbackRate, playbackRatePresets: presets, setPlaybackRatePresets } =
+      playbackSettingsStore.getState();
+    setPlaybackRatePresets(presets.map((p, i) => (i === index ? playbackRate : p)));
   }, []);
 
   const handleSelectPitch = useCallback((mode: PitchCorrection) => {
@@ -62,16 +84,61 @@ export const PlaybackSpeedSheet = memo(function PlaybackSpeedSheet({ visible, on
   }, []);
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} maxHeight="55%" scrollable={false}>
+    <BottomSheet visible={visible} onClose={onClose} maxHeight="75%" scrollable={false}>
       <Text style={[styles.title, { color: colors.textPrimary }]}>{t('playbackSpeed')}</Text>
 
+      <View style={styles.stepperRow}>
+        <Pressable
+          onPress={() => handleStep(-PLAYBACK_RATE_STEP)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('decreaseSpeed')}
+          style={({ pressed }) => [
+            styles.stepButton,
+            { backgroundColor: colors.inputBg },
+            pressed && styles.pillPressed,
+          ]}
+        >
+          <Text style={[styles.stepLabel, { color: colors.textPrimary }]} allowFontScaling={false}>-</Text>
+        </Pressable>
+        <Text style={[styles.rateReadout, { color: colors.textPrimary }]} allowFontScaling={false}>
+          {formatRate(playbackRate)}
+        </Text>
+        <Pressable
+          onPress={() => handleStep(PLAYBACK_RATE_STEP)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('increaseSpeed')}
+          style={({ pressed }) => [
+            styles.stepButton,
+            { backgroundColor: colors.inputBg },
+            pressed && styles.pillPressed,
+          ]}
+        >
+          <Text style={[styles.stepLabel, { color: colors.textPrimary }]} allowFontScaling={false}>+</Text>
+        </Pressable>
+      </View>
+      <Slider
+        style={styles.slider}
+        minimumValue={MIN_PLAYBACK_RATE}
+        maximumValue={MAX_PLAYBACK_RATE}
+        step={PLAYBACK_RATE_STEP}
+        value={playbackRate}
+        onValueChange={handleSliderChange}
+        minimumTrackTintColor={colors.primary}
+        maximumTrackTintColor={colors.border}
+        thumbTintColor={colors.primary}
+        accessibilityLabel={t('playbackSpeed')}
+      />
+
       <View style={styles.speedGrid}>
-        {PLAYBACK_RATES.map((rate) => {
+        {playbackRatePresets.map((rate, index) => {
           const active = rate === playbackRate;
           return (
             <Pressable
-              key={rate}
+              key={index}
               onPress={() => handleSelectRate(rate)}
+              onLongPress={() => handleSavePreset(index)}
               style={({ pressed }) => [
                 styles.pill,
                 { backgroundColor: active ? colors.primary : colors.inputBg },
@@ -89,6 +156,10 @@ export const PlaybackSpeedSheet = memo(function PlaybackSpeedSheet({ visible, on
           );
         })}
       </View>
+
+      <Text style={[styles.presetHint, { color: colors.textSecondary }]}>
+        {t('speedPresetHint')}
+      </Text>
 
       <Text style={[styles.sectionLabel, { color: colors.label }]}>
         {t('pitchCorrection')}
@@ -120,6 +191,23 @@ export const PlaybackSpeedSheet = memo(function PlaybackSpeedSheet({ visible, on
 
 const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700', paddingHorizontal: 4, marginBottom: 14 },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  stepButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepLabel: { fontSize: 26, fontWeight: '600', lineHeight: 30 },
+  rateReadout: { fontSize: 32, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  slider: { height: 40, marginTop: 8, marginBottom: 12 },
+  presetHint: { fontSize: 12, paddingHorizontal: 4, marginTop: 8 },
   speedGrid: {
     flexDirection: 'row',
     gap: 6,

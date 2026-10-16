@@ -62,9 +62,18 @@ function normalizeFormat(value: StreamFormat): StreamFormat {
 /** Repeat mode: off → repeat queue → repeat single track. */
 export type RepeatModeSetting = 'off' | 'all' | 'one';
 
-/** Supported playback speed multipliers. */
-export const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
-export type PlaybackRate = (typeof PLAYBACK_RATES)[number];
+/** Playback speed bounds and step used by the speed sheet. */
+export const MIN_PLAYBACK_RATE = 0.25;
+export const MAX_PLAYBACK_RATE = 3;
+export const PLAYBACK_RATE_STEP = 0.05;
+export const DEFAULT_PLAYBACK_RATE_PRESETS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+export type PlaybackRate = number;
+
+/** Clamp to the supported range and round to the step, avoiding float drift (0.1 + 0.05). */
+export function normalizePlaybackRate(rate: number): PlaybackRate {
+  const clamped = Math.min(MAX_PLAYBACK_RATE, Math.max(MIN_PLAYBACK_RATE, rate));
+  return Number((Math.round(clamped / PLAYBACK_RATE_STEP) * PLAYBACK_RATE_STEP).toFixed(2));
+}
 
 /**
  * Pitch-correction quality mode applied when playing at non-1x speed:
@@ -144,6 +153,8 @@ export interface PlaybackSettingsState {
   repeatMode: RepeatModeSetting;
   /** Playback speed multiplier (1 = normal). */
   playbackRate: PlaybackRate;
+  /** User-editable quick-pick speeds shown in the speed sheet. */
+  playbackRatePresets: PlaybackRate[];
   /** Pitch-correction mode applied at non-1x speed (default 'none'). */
   pitchCorrection: PitchCorrection;
 
@@ -187,6 +198,7 @@ export interface PlaybackSettingsState {
   setEstimateContentLength: (enabled: boolean) => void;
   setRepeatMode: (mode: RepeatModeSetting) => void;
   setPlaybackRate: (rate: PlaybackRate) => void;
+  setPlaybackRatePresets: (presets: PlaybackRate[]) => void;
   setPitchCorrection: (mode: PitchCorrection) => void;
   setDownloadMaxBitRate: (bitRate: MaxBitRate) => void;
   setDownloadFormat: (format: StreamFormat) => void;
@@ -232,6 +244,7 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       estimateContentLength: Platform.OS === 'android',
       repeatMode: 'off',
       playbackRate: 1,
+      playbackRatePresets: DEFAULT_PLAYBACK_RATE_PRESETS,
       pitchCorrection: 'none',
       downloadMaxBitRate: 320,
       downloadFormat: 'mp3',
@@ -253,6 +266,7 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       setEstimateContentLength: (estimateContentLength) => set({ estimateContentLength }),
       setRepeatMode: (repeatMode) => set({ repeatMode }),
       setPlaybackRate: (playbackRate) => set({ playbackRate }),
+      setPlaybackRatePresets: (playbackRatePresets) => set({ playbackRatePresets }),
       setPitchCorrection: (pitchCorrection) => set({ pitchCorrection }),
       setDownloadMaxBitRate: (downloadMaxBitRate) => set({ downloadMaxBitRate }),
       setDownloadFormat: (downloadFormat) => set({ downloadFormat: normalizeFormat(downloadFormat) }),
@@ -280,6 +294,7 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
         estimateContentLength: state.estimateContentLength,
         repeatMode: state.repeatMode,
         playbackRate: state.playbackRate,
+        playbackRatePresets: state.playbackRatePresets,
         pitchCorrection: state.pitchCorrection,
         downloadMaxBitRate: state.downloadMaxBitRate,
         downloadFormat: state.downloadFormat,
