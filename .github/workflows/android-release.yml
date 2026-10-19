@@ -50,7 +50,8 @@ jobs:
           APK=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
           mkdir -p dist
           cp "$APK" "dist/musicode-${VERSION}.apk"
-          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "dist/musicode-${VERSION}.apk"
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BUILD_TOOLS/apksigner" verify --print-certs "dist/musicode-${VERSION}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
