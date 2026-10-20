@@ -148,9 +148,9 @@ describe('AlbumInfoContent', () => {
       />,
     );
 
-    // Metadata rows should not be rendered during loading
-    expect(queryByText('Album')).toBeNull();
-    expect(queryByText('Test Album')).toBeNull();
+    // Track-derived header stays visible; only the fetched parts wait.
+    expect(queryByText('Test Album')).toBeTruthy();
+    expect(queryByText('No album details available for this track.')).toBeNull();
   });
 
   it('renders album description notes', () => {
@@ -350,8 +350,9 @@ describe('AlbumInfoContent', () => {
       />,
     );
 
-    // Skeleton should show, metadata should not
-    expect(queryByText('Test Album')).toBeNull();
+    // Header stays; the fetched section shows the skeleton, not the placeholder.
+    expect(queryByText('Test Album')).toBeTruthy();
+    expect(queryByText('No album details available for this track.')).toBeNull();
   });
 
   it('renders displayAlbumArtist when different from artist', () => {
@@ -699,6 +700,26 @@ describe('AlbumInfoContent', () => {
       );
 
       expect(queryByText('Retry')).toBeNull();
+    });
+
+    it('keeps the track-derived header above the error message', () => {
+      const { getByText } = render(
+        <AlbumInfoContent
+          track={MOCK_TRACK}
+          albumInfo={null}
+          overrideMbid={null}
+          sanitizedNotes={null}
+          notesAttributionUrl={null}
+          albumInfoLoading={false}
+          albumInfoError="timeout"
+          onRetry={jest.fn()}
+          refreshing={false}
+          onRefresh={jest.fn()}
+          colors={COLORS}
+        />,
+      );
+      expect(getByText('Test Album')).toBeTruthy();
+      expect(getByText('Retry')).toBeTruthy();
     });
 
     it('prefers the loading skeleton over the error state while loading', () => {

@@ -169,6 +169,67 @@ export const AlbumInfoContent = memo(function AlbumInfoContent({
         />
       }
     >
+      {/* ── Hero header block (centered) ── */}
+      <View style={styles.heroBlock}>
+        {/* Album & artist */}
+        {track.album && (
+          <Text style={[styles.albumTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+            {track.album}
+          </Text>
+        )}
+        {track.artist && (
+          <Text style={[styles.artistSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+            {track.artist}
+          </Text>
+        )}
+
+        {/* Format badge */}
+        {effectiveFormat && (
+          <View style={styles.formatBadgeWrap}>
+            <FormatBadge format={effectiveFormat} textColor={colors.textPrimary} />
+          </View>
+        )}
+
+        {/* Genre pills */}
+        {genreNames.length > 0 && (
+          <View style={styles.genrePillCloud}>
+            {genreNames.map((name, i) => {
+              const pillColor = VIZ_PALETTE[i % VIZ_PALETTE.length];
+              return (
+                <View
+                  key={name}
+                  style={[styles.genrePill, { backgroundColor: hexWithAlpha(pillColor, 0.35) }]}
+                >
+                  <Text style={[styles.genrePillText, { color: colors.textPrimary }]}>{name}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
+      {/* ── Inline metadata strip ── */}
+      {metaPhrases.length > 0 && (
+        <Text style={[styles.metaStrip, { color: colors.textSecondary }]}>
+          {metaPhrases.join('  ·  ')}
+        </Text>
+      )}
+
+      {/* ── Credits (only if present) ── */}
+      {credits.length > 0 && (
+        <View style={styles.creditsSection}>
+          <View style={[styles.divider, { backgroundColor: colors.textSecondary }]} />
+          {credits.map((row) => (
+            <View key={row.label} style={styles.creditRow}>
+              <Text style={[styles.creditLabel, { color: colors.textSecondary }]}>{row.label}</Text>
+              <Text style={[styles.creditValue, { color: colors.textPrimary }]} numberOfLines={2}>
+                {row.value}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       {albumInfoError && !albumInfoLoading && !refreshing ? (
         <View style={styles.errorBlock}>
           <Ionicons
@@ -203,67 +264,6 @@ export const AlbumInfoContent = memo(function AlbumInfoContent({
         <AlbumInfoSkeleton colors={colors} />
       ) : (
         <>
-          {/* ── Hero header block (centered) ── */}
-          <View style={styles.heroBlock}>
-            {/* Album & artist */}
-            {track.album && (
-              <Text style={[styles.albumTitle, { color: colors.textPrimary }]} numberOfLines={2}>
-                {track.album}
-              </Text>
-            )}
-            {track.artist && (
-              <Text style={[styles.artistSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-                {track.artist}
-              </Text>
-            )}
-
-            {/* Format badge */}
-            {effectiveFormat && (
-              <View style={styles.formatBadgeWrap}>
-                <FormatBadge format={effectiveFormat} textColor={colors.textPrimary} />
-              </View>
-            )}
-
-            {/* Genre pills */}
-            {genreNames.length > 0 && (
-              <View style={styles.genrePillCloud}>
-                {genreNames.map((name, i) => {
-                  const pillColor = VIZ_PALETTE[i % VIZ_PALETTE.length];
-                  return (
-                    <View
-                      key={name}
-                      style={[styles.genrePill, { backgroundColor: hexWithAlpha(pillColor, 0.35) }]}
-                    >
-                      <Text style={[styles.genrePillText, { color: colors.textPrimary }]}>{name}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-
-          {/* ── Inline metadata strip ── */}
-          {metaPhrases.length > 0 && (
-            <Text style={[styles.metaStrip, { color: colors.textSecondary }]}>
-              {metaPhrases.join('  ·  ')}
-            </Text>
-          )}
-
-          {/* ── Credits (only if present) ── */}
-          {credits.length > 0 && (
-            <View style={styles.creditsSection}>
-              <View style={[styles.divider, { backgroundColor: colors.textSecondary }]} />
-              {credits.map((row) => (
-                <View key={row.label} style={styles.creditRow}>
-                  <Text style={[styles.creditLabel, { color: colors.textSecondary }]}>{row.label}</Text>
-                  <Text style={[styles.creditValue, { color: colors.textPrimary }]} numberOfLines={2}>
-                    {row.value}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-
           {/* ── Album description ── */}
           {sanitizedNotes ? (
             <View style={styles.descriptionSection}>
@@ -405,21 +405,6 @@ const AlbumInfoSkeleton = memo(function AlbumInfoSkeleton({
 
   return (
     <Animated.View style={pulseStyle}>
-      {/* Hero block */}
-      <View style={styles.heroBlock}>
-        <View style={[styles.skeletonBar, styles.skeletonAlbumTitle, skeletonFill]} />
-        <View style={[styles.skeletonBar, styles.skeletonArtistSubtitle, skeletonFill]} />
-        <View style={[styles.skeletonBar, styles.skeletonFormatBadge, skeletonFill]} />
-        <View style={styles.skeletonGenrePillRow}>
-          {[72, 96, 60, 84].map((w, i) => (
-            <View key={i} style={[styles.skeletonBar, styles.skeletonGenrePill, skeletonFill, { width: w }]} />
-          ))}
-        </View>
-      </View>
-
-      {/* Inline metadata strip */}
-      <View style={[styles.skeletonBar, styles.skeletonMetaStrip, skeletonFill]} />
-
       {/* Description */}
       <View style={[styles.divider, { backgroundColor: colors.textSecondary }]} />
       <View style={styles.descriptionSection}>
@@ -594,37 +579,6 @@ const styles = StyleSheet.create({
   skeletonBar: {
     height: 12,
     borderRadius: 6,
-  },
-  skeletonAlbumTitle: {
-    width: '65%',
-    height: 18,
-    borderRadius: 9,
-  },
-  skeletonArtistSubtitle: {
-    width: '40%',
-    height: 14,
-    borderRadius: 7,
-  },
-  skeletonFormatBadge: {
-    width: 90,
-    height: 22,
-    borderRadius: 11,
-  },
-  skeletonGenrePillRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  skeletonGenrePill: {
-    height: 24,
-    borderRadius: 12,
-  },
-  skeletonMetaStrip: {
-    alignSelf: 'center',
-    width: '70%',
-    height: 12,
-    marginBottom: 8,
   },
   skeletonTextLine: {
     height: 14,
