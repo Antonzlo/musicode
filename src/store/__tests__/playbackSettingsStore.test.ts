@@ -84,6 +84,14 @@ describe('playbackSettingsStore', () => {
     expect(stepPlaybackRateBySemitones(0.25, -1)).toBe(0.25);
   });
 
+  it('stores the gradual speed change settings', () => {
+    expect(playbackSettingsStore.getState().gradualSpeedChange).toBe(false);
+    playbackSettingsStore.getState().setGradualSpeedChange(true);
+    playbackSettingsStore.getState().setSpeedRampMs(750);
+    expect(playbackSettingsStore.getState().gradualSpeedChange).toBe(true);
+    expect(playbackSettingsStore.getState().speedRampMs).toBe(750);
+  });
+
   it('stores the semitone settings', () => {
     playbackSettingsStore.getState().setShowSemitoneControls(true);
     playbackSettingsStore.getState().setSemitoneStep(0.5);

@@ -683,6 +683,65 @@ describe('applyPlaybackRate', () => {
     expect(playbackSettingsStore.getState().playbackRate).toBe(1.5);
     expect(mockTP.setPlaybackSpeed).toHaveBeenCalledWith(1.5);
   });
+
+  describe('gradual speed change', () => {
+    beforeEach(async () => {
+      jest.useFakeTimers();
+      playbackSettingsStore.setState({ gradualSpeedChange: false, playbackRate: 1 } as any);
+      await applyPlaybackRate(1);
+      playbackSettingsStore.setState({ gradualSpeedChange: true, speedRampMs: 500 } as any);
+      mockTP.setPlaybackSpeed.mockClear();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+      playbackSettingsStore.setState({ gradualSpeedChange: false } as any);
+    });
+
+    it('stores the target at once and glides the engine up to it', async () => {
+      await applyPlaybackRate(2);
+      expect(playbackSettingsStore.getState().playbackRate).toBe(2);
+      expect(mockTP.setPlaybackSpeed).not.toHaveBeenCalled();
+
+      jest.advanceTimersByTime(250);
+      const midway = mockTP.setPlaybackSpeed.mock.calls.at(-1)![0];
+      expect(midway).toBeGreaterThan(1);
+      expect(midway).toBeLessThan(2);
+
+      jest.advanceTimersByTime(250);
+      expect(mockTP.setPlaybackSpeed).toHaveBeenLastCalledWith(2);
+      const callsAtEnd = mockTP.setPlaybackSpeed.mock.calls.length;
+      jest.advanceTimersByTime(500);
+      expect(mockTP.setPlaybackSpeed.mock.calls.length).toBe(callsAtEnd);
+    });
+
+    it('restarts from the current engine rate when the target changes mid-glide', async () => {
+      await applyPlaybackRate(2);
+      jest.advanceTimersByTime(250);
+      const midway = mockTP.setPlaybackSpeed.mock.calls.at(-1)![0];
+      mockTP.setPlaybackSpeed.mockClear();
+
+      await applyPlaybackRate(1);
+      jest.advanceTimersByTime(50);
+      const next = mockTP.setPlaybackSpeed.mock.calls.at(-1)![0];
+      expect(next).toBeLessThan(midway);
+      expect(next).toBeGreaterThan(1);
+
+      jest.advanceTimersByTime(500);
+      expect(mockTP.setPlaybackSpeed).toHaveBeenLastCalledWith(1);
+    });
+
+    it('jumps straight to the rate when it already matches', async () => {
+      await applyPlaybackRate(1);
+      expect(mockTP.setPlaybackSpeed).toHaveBeenCalledWith(1);
+    });
+
+    it('ignores a rejected tick', async () => {
+      await applyPlaybackRate(2);
+      mockTP.setPlaybackSpeed.mockRejectedValueOnce(new Error('player gone'));
+      expect(() => jest.advanceTimersByTime(500)).not.toThrow();
+    });
+  });
 });
 
 describe('updateRemoteCapabilities', () => {

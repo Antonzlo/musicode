@@ -22,7 +22,12 @@ import { PlayerControlsCard } from '../PlayerControlsCard';
 import { playbackSettingsStore } from '../../../store/playbackSettingsStore';
 
 beforeEach(() => {
-  playbackSettingsStore.setState({ showSemitoneControls: false, semitoneStep: 1 });
+  playbackSettingsStore.setState({
+    showSemitoneControls: false,
+    semitoneStep: 1,
+    gradualSpeedChange: false,
+    speedRampMs: 500,
+  });
 });
 
 describe('PlayerControlsCard semitone settings', () => {
@@ -47,5 +52,48 @@ describe('PlayerControlsCard semitone settings', () => {
     fireEvent.press(screen.getByText('Semitone step'));
     fireEvent.press(screen.getByText('0.25 st'));
     expect(playbackSettingsStore.getState().semitoneStep).toBe(0.25);
+  });
+});
+
+describe('PlayerControlsCard gradual speed settings', () => {
+  it('hides the duration picker while the toggle is off', () => {
+    render(<PlayerControlsCard />);
+    expect(screen.getByText('Gradual speed changes')).toBeTruthy();
+    expect(screen.queryByText('Glide duration')).toBeNull();
+  });
+
+  it('turning it on stores it and shows the current preset duration', () => {
+    render(<PlayerControlsCard />);
+    const switches = screen.UNSAFE_getAllByType(Switch);
+    fireEvent(switches[switches.length - 1], 'valueChange', true);
+    expect(playbackSettingsStore.getState().gradualSpeedChange).toBe(true);
+    expect(screen.getByText('Glide duration')).toBeTruthy();
+    expect(screen.getByText('0.5 s')).toBeTruthy();
+  });
+
+  it('picking a preset stores its duration and keeps the slider hidden', () => {
+    playbackSettingsStore.setState({ gradualSpeedChange: true });
+    render(<PlayerControlsCard />);
+    fireEvent.press(screen.getByText('Glide duration'));
+    fireEvent.press(screen.getByText('2 s'));
+    expect(playbackSettingsStore.getState().speedRampMs).toBe(2000);
+    expect(screen.queryByText('Custom duration')).toBeNull();
+  });
+
+  it('Custom reveals a slider that sets any duration', () => {
+    playbackSettingsStore.setState({ gradualSpeedChange: true });
+    render(<PlayerControlsCard />);
+    fireEvent.press(screen.getByText('Glide duration'));
+    fireEvent.press(screen.getByText('Custom'));
+    expect(screen.getByText('Custom duration')).toBeTruthy();
+    fireEvent(screen.getByLabelText('Custom duration'), 'valueChange', 1350);
+    expect(playbackSettingsStore.getState().speedRampMs).toBe(1350);
+    expect(screen.getByText('1.35 s')).toBeTruthy();
+  });
+
+  it('starts in custom mode when the stored duration is not a preset', () => {
+    playbackSettingsStore.setState({ gradualSpeedChange: true, speedRampMs: 1350 });
+    render(<PlayerControlsCard />);
+    expect(screen.getByText('Custom duration')).toBeTruthy();
   });
 });

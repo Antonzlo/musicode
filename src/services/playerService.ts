@@ -126,6 +126,7 @@ export async function initPlayer(): Promise<void> {
   // Apply persisted playback settings.
   const settings = playbackSettingsStore.getState();
   await tp.setRepeatMode(mapRepeatMode(settings.repeatMode));
+  engineRate = settings.playbackRate;
   await tp.setPlaybackSpeed(settings.playbackRate);
   // Pitch correction (only effective at rate != 1x). RNQP defaults to 'voice',
   // so the persisted mode must be pushed explicitly (our default is 'none').
@@ -956,10 +957,41 @@ export async function cycleRepeatMode(): Promise<void> {
   await tp.setRepeatMode(mapRepeatMode(next));
 }
 
-/** Set the playback rate (persisted store + native engine). */
+const RATE_RAMP_TICK_MS = 50;
+let rateRampTimer: ReturnType<typeof setInterval> | null = null;
+/** Rate last sent to the engine; null until the first change this session. */
+let engineRate: number | null = null;
+
+function cancelRateRamp(): void {
+  if (rateRampTimer) clearInterval(rateRampTimer);
+  rateRampTimer = null;
+}
+
+/**
+ * Set the playback rate (persisted store + native engine). With gradual speed
+ * changes on, the engine glides from its current rate to the target over
+ * `speedRampMs` (ease-out), restarting from wherever it is if the target moves
+ * mid-glide. The store always holds the target.
+ */
 export async function applyPlaybackRate(rate: PlaybackRate): Promise<void> {
+  const { playbackRate: previous, gradualSpeedChange, speedRampMs } = playbackSettingsStore.getState();
   playbackSettingsStore.getState().setPlaybackRate(rate);
-  await tp.setPlaybackSpeed(rate);
+  cancelRateRamp();
+  const from = engineRate ?? previous;
+  if (!gradualSpeedChange || from === rate) {
+    engineRate = rate;
+    await tp.setPlaybackSpeed(rate);
+    return;
+  }
+  const startedAt = Date.now();
+  rateRampTimer = setInterval(() => {
+    const progress = Math.min(1, (Date.now() - startedAt) / speedRampMs);
+    const eased = 1 - (1 - progress) * (1 - progress);
+    engineRate = progress === 1 ? rate : Number((from + (rate - from) * eased).toFixed(3));
+    if (progress === 1) cancelRateRamp();
+    // Best-effort: the final tick always sends the exact target.
+    tp.setPlaybackSpeed(engineRate).catch(() => {});
+  }, RATE_RAMP_TICK_MS);
 }
 
 /**

@@ -1,10 +1,19 @@
-import { useMemo } from 'react';
+import Slider from '@react-native-community/slider';
+import { useMemo, useState } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { useTheme } from '../../hooks/useTheme';
 import { settingsStyles } from '../../styles/settingsStyles';
-import { playbackSettingsStore, SEMITONE_STEPS, type SemitoneStep } from '../../store/playbackSettingsStore';
+import {
+  MAX_SPEED_RAMP_MS,
+  MIN_SPEED_RAMP_MS,
+  playbackSettingsStore,
+  SEMITONE_STEPS,
+  SPEED_RAMP_PRESETS_MS,
+  SPEED_RAMP_STEP_MS,
+  type SemitoneStep,
+} from '../../store/playbackSettingsStore';
 import { DropdownRow, type DropdownOption } from './DropdownRow';
 import { SettingsSectionTitle } from './SettingsSectionTitle';
 
@@ -19,6 +28,31 @@ export function PlayerControlsCard() {
   const semitoneStep = playbackSettingsStore((s) => s.semitoneStep);
   const setShowSemitoneControls = playbackSettingsStore((s) => s.setShowSemitoneControls);
   const setSemitoneStep = playbackSettingsStore((s) => s.setSemitoneStep);
+
+  const gradualSpeedChange = playbackSettingsStore((s) => s.gradualSpeedChange);
+  const speedRampMs = playbackSettingsStore((s) => s.speedRampMs);
+  const setGradualSpeedChange = playbackSettingsStore((s) => s.setGradualSpeedChange);
+  const setSpeedRampMs = playbackSettingsStore((s) => s.setSpeedRampMs);
+  const [customRamp, setCustomRamp] = useState(
+    () => !(SPEED_RAMP_PRESETS_MS as readonly number[]).includes(speedRampMs),
+  );
+
+  const rampOptions: DropdownOption<number | 'custom'>[] = useMemo(
+    () => [
+      ...SPEED_RAMP_PRESETS_MS.map((v) => ({ value: v, label: t('rampSecondsValue', { value: v / 1000 }) })),
+      { value: 'custom' as const, label: t('custom') },
+    ],
+    [t],
+  );
+
+  const handleRampChange = (value: number | 'custom') => {
+    if (value === 'custom') {
+      setCustomRamp(true);
+      return;
+    }
+    setCustomRamp(false);
+    setSpeedRampMs(value);
+  };
 
   const stepOptions: DropdownOption<SemitoneStep>[] = useMemo(
     () => SEMITONE_STEPS.map((v) => ({ value: v, label: t('semitoneStepValue', { value: v }) })),
@@ -59,12 +93,7 @@ export function PlayerControlsCard() {
             trackColor={{ false: colors.border, true: colors.primary }}
           />
         </View>
-        <View
-          style={[
-            styles.toggleRow,
-            showSemitoneControls && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-          ]}
-        >
+        <View style={[styles.toggleRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
           <View style={styles.textWrap}>
             <Text style={[styles.label, { color: colors.textPrimary }]}>
               {t('showSemitoneControls')}
@@ -85,8 +114,58 @@ export function PlayerControlsCard() {
             value={semitoneStep}
             options={stepOptions}
             onChange={setSemitoneStep}
-            isLast
           />
+        )}
+        <View
+          style={[
+            styles.toggleRow,
+            gradualSpeedChange && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+          ]}
+        >
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>
+              {t('gradualSpeedChange')}
+            </Text>
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>
+              {t('gradualSpeedChangeHint')}
+            </Text>
+          </View>
+          <Switch
+            value={gradualSpeedChange}
+            onValueChange={setGradualSpeedChange}
+            trackColor={{ false: colors.border, true: colors.primary }}
+          />
+        </View>
+        {gradualSpeedChange && (
+          <DropdownRow
+            label={t('speedRampDuration')}
+            value={customRamp ? 'custom' : speedRampMs}
+            options={rampOptions}
+            onChange={handleRampChange}
+            isLast={!customRamp}
+          />
+        )}
+        {gradualSpeedChange && customRamp && (
+          <View style={styles.sliderSection}>
+            <View style={styles.sliderHeader}>
+              <Text style={[styles.label, { color: colors.textPrimary }]}>{t('customDuration')}</Text>
+              <Text style={[styles.label, { color: colors.primary }]}>
+                {t('rampSecondsValue', { value: speedRampMs / 1000 })}
+              </Text>
+            </View>
+            <Slider
+              style={styles.slider}
+              minimumValue={MIN_SPEED_RAMP_MS}
+              maximumValue={MAX_SPEED_RAMP_MS}
+              step={SPEED_RAMP_STEP_MS}
+              value={speedRampMs}
+              onValueChange={setSpeedRampMs}
+              minimumTrackTintColor={colors.primary}
+              maximumTrackTintColor={colors.border}
+              thumbTintColor={colors.primary}
+              accessibilityLabel={t('customDuration')}
+            />
+          </View>
         )}
       </View>
     </View>
@@ -102,6 +181,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 12,
   },
+  sliderSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  sliderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+  },
+  slider: { width: '100%', height: 40 },
   textWrap: {
     flex: 1,
   },
