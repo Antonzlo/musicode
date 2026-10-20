@@ -58,6 +58,18 @@ jobs:
           name: musicode-apk
           path: dist/*.apk
 
+      - name: Publish rolling dev release
+        if: github.ref == 'refs/heads/musicode'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete dev --cleanup-tag --yes || true
+          gh release create dev dist/*.apk \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Musicode dev build" \
+            --notes "Rolling build of the musicode branch at $GITHUB_SHA."
+
       - name: Attach APK to GitHub release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
