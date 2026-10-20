@@ -715,6 +715,21 @@ describe('applyPlaybackRate', () => {
       expect(mockTP.setPlaybackSpeed.mock.calls.length).toBe(callsAtEnd);
     });
 
+    it('moves in fine, even pitch steps and skips negligible ones', async () => {
+      await applyPlaybackRate(2);
+      jest.advanceTimersByTime(500);
+      const rates = [1, ...mockTP.setPlaybackSpeed.mock.calls.map((c: number[]) => c[0])];
+      const steps = rates.slice(1).map((r, i) => 12 * Math.log2(r / rates[i]));
+      expect(steps.length).toBeGreaterThan(15);
+      expect(Math.max(...steps)).toBeLessThan(1.1);
+      expect(Math.min(...steps)).toBeGreaterThan(0);
+
+      mockTP.setPlaybackSpeed.mockClear();
+      await applyPlaybackRate(2.001);
+      jest.advanceTimersByTime(40);
+      expect(mockTP.setPlaybackSpeed).not.toHaveBeenCalled();
+    });
+
     it('restarts from the current engine rate when the target changes mid-glide', async () => {
       await applyPlaybackRate(2);
       jest.advanceTimersByTime(250);

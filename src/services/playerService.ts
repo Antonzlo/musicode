@@ -957,7 +957,9 @@ export async function cycleRepeatMode(): Promise<void> {
   await tp.setRepeatMode(mapRepeatMode(next));
 }
 
-const RATE_RAMP_TICK_MS = 50;
+const RATE_RAMP_TICK_MS = 20;
+/** Ramp steps smaller than this are skipped; each one costs a bridge call. */
+const RATE_RAMP_MIN_STEP = 0.002;
 let rateRampTimer: ReturnType<typeof setInterval> | null = null;
 /** Rate last sent to the engine; null until the first change this session. */
 let engineRate: number | null = null;
@@ -970,8 +972,8 @@ function cancelRateRamp(): void {
 /**
  * Set the playback rate (persisted store + native engine). With gradual speed
  * changes on, the engine glides from its current rate to the target over
- * `speedRampMs` (ease-out), restarting from wherever it is if the target moves
- * mid-glide. The store always holds the target.
+ * `speedRampMs` (ease-out, even in pitch), restarting from wherever it is if
+ * the target moves mid-glide. The store always holds the target.
  */
 export async function applyPlaybackRate(rate: PlaybackRate): Promise<void> {
   const { playbackRate: previous, gradualSpeedChange, speedRampMs } = playbackSettingsStore.getState();
@@ -984,13 +986,18 @@ export async function applyPlaybackRate(rate: PlaybackRate): Promise<void> {
     return;
   }
   const startedAt = Date.now();
+  let sent = from;
   rateRampTimer = setInterval(() => {
     const progress = Math.min(1, (Date.now() - startedAt) / speedRampMs);
     const eased = 1 - (1 - progress) * (1 - progress);
-    engineRate = progress === 1 ? rate : Number((from + (rate - from) * eased).toFixed(3));
+    // Interpolate in log space so pitch moves at an even rate, like a turntable.
+    const next = progress === 1 ? rate : Number((from * (rate / from) ** eased).toFixed(3));
     if (progress === 1) cancelRateRamp();
+    else if (Math.abs(next - sent) < RATE_RAMP_MIN_STEP) return;
+    sent = next;
+    engineRate = next;
     // Best-effort: the final tick always sends the exact target.
-    tp.setPlaybackSpeed(engineRate).catch(() => {});
+    tp.setPlaybackSpeed(next).catch(() => {});
   }, RATE_RAMP_TICK_MS);
 }
 
