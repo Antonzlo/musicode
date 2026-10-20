@@ -48,6 +48,8 @@ beforeEach(() => {
   playbackSettingsStore.setState({
     playbackRate: 1,
     playbackRatePresets: [...DEFAULT_PLAYBACK_RATE_PRESETS],
+    showSemitoneControls: false,
+    semitoneStep: 1,
   });
 });
 
@@ -101,5 +103,39 @@ describe('PlaybackSpeedSheet', () => {
     const { getByText } = renderSheet();
     fireEvent(getByText('1.5x'), 'longPress');
     expect(playbackSettingsStore.getState().playbackRatePresets).toEqual([0.5, 0.75, 1, 1.25, 1.8, 2]);
+  });
+
+  describe('semitone controls', () => {
+    it('are hidden unless enabled in settings', () => {
+      const { queryByText } = renderSheet();
+      expect(queryByText('+1st')).toBeNull();
+      expect(queryByText('0.00st')).toBeNull();
+    });
+
+    it('show the step buttons and a pitch readout when enabled', () => {
+      playbackSettingsStore.setState({ showSemitoneControls: true, semitoneStep: 0.5 });
+      const { getByText } = renderSheet();
+      expect(getByText('-0.5st')).toBeTruthy();
+      expect(getByText('+0.5st')).toBeTruthy();
+      expect(getByText('0.00st')).toBeTruthy();
+    });
+
+    it('step the speed by one semitone ratio', () => {
+      playbackSettingsStore.setState({ showSemitoneControls: true });
+      const { getByText } = renderSheet();
+      fireEvent.press(getByText('+1st'));
+      expect(applyPlaybackRate).toHaveBeenLastCalledWith(1.059);
+      fireEvent.press(getByText('-1st'));
+      expect(applyPlaybackRate).toHaveBeenLastCalledWith(1);
+    });
+
+    it('format the readout with sign', () => {
+      playbackSettingsStore.setState({ showSemitoneControls: true, playbackRate: 2 });
+      const { getByText, rerender } = renderSheet();
+      expect(getByText('+12.00st')).toBeTruthy();
+      act(() => playbackSettingsStore.setState({ playbackRate: 0.5 }));
+      rerender(<PlaybackSpeedSheet visible onClose={() => {}} />);
+      expect(getByText('-12.00st')).toBeTruthy();
+    });
   });
 });

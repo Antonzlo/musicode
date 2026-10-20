@@ -24,6 +24,8 @@ import {
   normalizePlaybackRate,
   PITCH_CORRECTION_MODES,
   PLAYBACK_RATE_STEP,
+  playbackRateToSemitones,
+  stepPlaybackRateBySemitones,
   playbackSettingsStore,
   type PitchCorrection,
   type PlaybackRate,
@@ -35,6 +37,14 @@ function formatRate(rate: number): string {
   if (Number.isInteger(rate)) return `${rate}x`;
   if (rate < 1) return `${rate.toString().replace('0.', '.')}x`;
   return `${rate}x`;
+}
+
+/** Pitch offset label: 0 → "0.00st", 1.0595 → "+1.00st", 0.5 → "-12.00st". */
+function formatSemitones(rate: number): string {
+  const st = playbackRateToSemitones(rate);
+  const text = Math.abs(st).toFixed(2);
+  if (Number(text) === 0) return '0.00st';
+  return `${st < 0 ? '-' : '+'}${text}st`;
 }
 
 const PITCH_LABEL_KEYS: Record<PitchCorrection, string> = {
@@ -53,6 +63,8 @@ export const PlaybackSpeedSheet = memo(function PlaybackSpeedSheet({ visible, on
   const { t } = useTranslation();
   const playbackRate = playbackSettingsStore((s) => s.playbackRate);
   const playbackRatePresets = playbackSettingsStore((s) => s.playbackRatePresets);
+  const showSemitoneControls = playbackSettingsStore((s) => s.showSemitoneControls);
+  const semitoneStep = playbackSettingsStore((s) => s.semitoneStep);
   const pitchCorrection = playbackSettingsStore((s) => s.pitchCorrection);
 
   const handleSelectRate = useCallback((rate: PlaybackRate) => {
@@ -69,6 +81,12 @@ export const PlaybackSpeedSheet = memo(function PlaybackSpeedSheet({ visible, on
     selectionAsync();
     const current = playbackSettingsStore.getState().playbackRate;
     void applyPlaybackRate(normalizePlaybackRate(current + delta));
+  }, []);
+
+  const handleSemitoneStep = useCallback((direction: 1 | -1) => {
+    selectionAsync();
+    const { playbackRate, semitoneStep: step } = playbackSettingsStore.getState();
+    void applyPlaybackRate(stepPlaybackRateBySemitones(playbackRate, direction * step));
   }, []);
 
   const handleSavePreset = useCallback((index: number) => {
@@ -118,6 +136,43 @@ export const PlaybackSpeedSheet = memo(function PlaybackSpeedSheet({ visible, on
           <Text style={[styles.stepLabel, { color: colors.textPrimary }]} allowFontScaling={false}>+</Text>
         </Pressable>
       </View>
+      {showSemitoneControls && (
+        <View style={styles.semitoneRow}>
+          <Pressable
+            onPress={() => handleSemitoneStep(-1)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('decreaseSemitones', { step: semitoneStep })}
+            style={({ pressed }) => [
+              styles.semitoneButton,
+              { backgroundColor: colors.inputBg },
+              pressed && styles.pillPressed,
+            ]}
+          >
+            <Text style={[styles.pillLabel, { color: colors.textPrimary }]} allowFontScaling={false}>
+              {`-${semitoneStep}st`}
+            </Text>
+          </Pressable>
+          <Text style={[styles.semitoneReadout, { color: colors.textSecondary }]} allowFontScaling={false}>
+            {formatSemitones(playbackRate)}
+          </Text>
+          <Pressable
+            onPress={() => handleSemitoneStep(1)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('increaseSemitones', { step: semitoneStep })}
+            style={({ pressed }) => [
+              styles.semitoneButton,
+              { backgroundColor: colors.inputBg },
+              pressed && styles.pillPressed,
+            ]}
+          >
+            <Text style={[styles.pillLabel, { color: colors.textPrimary }]} allowFontScaling={false}>
+              {`+${semitoneStep}st`}
+            </Text>
+          </Pressable>
+        </View>
+      )}
       <Slider
         style={styles.slider}
         minimumValue={MIN_PLAYBACK_RATE}
@@ -206,6 +261,21 @@ const styles = StyleSheet.create({
   },
   stepLabel: { fontSize: 26, fontWeight: '600', lineHeight: 30 },
   rateReadout: { fontSize: 32, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  semitoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginTop: 12,
+  },
+  semitoneButton: {
+    minWidth: 72,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  semitoneReadout: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
   slider: { height: 40, marginTop: 8, marginBottom: 12 },
   presetHint: { fontSize: 12, paddingHorizontal: 4, marginTop: 8 },
   speedGrid: {

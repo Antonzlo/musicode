@@ -69,6 +69,21 @@ export const PLAYBACK_RATE_STEP = 0.05;
 export const DEFAULT_PLAYBACK_RATE_PRESETS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 export type PlaybackRate = number;
 
+/** Semitone step sizes offered for the speed sheet's st buttons. */
+export const SEMITONE_STEPS = [0.25, 0.5, 1] as const;
+export type SemitoneStep = (typeof SEMITONE_STEPS)[number];
+
+/** Playback speed expressed as a pitch offset in semitones (1x = 0). */
+export function playbackRateToSemitones(rate: number): number {
+  return 12 * Math.log2(rate);
+}
+
+/** Speed after moving `semitones` up or down, clamped to the supported range. */
+export function stepPlaybackRateBySemitones(rate: number, semitones: number): PlaybackRate {
+  const next = Number((rate * 2 ** (semitones / 12)).toFixed(3));
+  return Math.min(MAX_PLAYBACK_RATE, Math.max(MIN_PLAYBACK_RATE, next));
+}
+
 /** Clamp to the supported range and round to the step, avoiding float drift (0.1 + 0.05). */
 export function normalizePlaybackRate(rate: number): PlaybackRate {
   const clamped = Math.min(MAX_PLAYBACK_RATE, Math.max(MIN_PLAYBACK_RATE, rate));
@@ -155,6 +170,10 @@ export interface PlaybackSettingsState {
   playbackRate: PlaybackRate;
   /** User-editable quick-pick speeds shown in the speed sheet. */
   playbackRatePresets: PlaybackRate[];
+  /** Show the semitone readout and step buttons in the speed sheet. */
+  showSemitoneControls: boolean;
+  /** Size of one semitone button press. */
+  semitoneStep: SemitoneStep;
   /** Pitch-correction mode applied at non-1x speed (default 'none'). */
   pitchCorrection: PitchCorrection;
 
@@ -199,6 +218,8 @@ export interface PlaybackSettingsState {
   setRepeatMode: (mode: RepeatModeSetting) => void;
   setPlaybackRate: (rate: PlaybackRate) => void;
   setPlaybackRatePresets: (presets: PlaybackRate[]) => void;
+  setShowSemitoneControls: (show: boolean) => void;
+  setSemitoneStep: (step: SemitoneStep) => void;
   setPitchCorrection: (mode: PitchCorrection) => void;
   setDownloadMaxBitRate: (bitRate: MaxBitRate) => void;
   setDownloadFormat: (format: StreamFormat) => void;
@@ -245,6 +266,8 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       repeatMode: 'off',
       playbackRate: 1,
       playbackRatePresets: DEFAULT_PLAYBACK_RATE_PRESETS,
+      showSemitoneControls: false,
+      semitoneStep: 1,
       pitchCorrection: 'none',
       downloadMaxBitRate: 320,
       downloadFormat: 'mp3',
@@ -267,6 +290,8 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       setRepeatMode: (repeatMode) => set({ repeatMode }),
       setPlaybackRate: (playbackRate) => set({ playbackRate }),
       setPlaybackRatePresets: (playbackRatePresets) => set({ playbackRatePresets }),
+      setShowSemitoneControls: (showSemitoneControls) => set({ showSemitoneControls }),
+      setSemitoneStep: (semitoneStep) => set({ semitoneStep }),
       setPitchCorrection: (pitchCorrection) => set({ pitchCorrection }),
       setDownloadMaxBitRate: (downloadMaxBitRate) => set({ downloadMaxBitRate }),
       setDownloadFormat: (downloadFormat) => set({ downloadFormat: normalizeFormat(downloadFormat) }),
@@ -295,6 +320,8 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
         repeatMode: state.repeatMode,
         playbackRate: state.playbackRate,
         playbackRatePresets: state.playbackRatePresets,
+        showSemitoneControls: state.showSemitoneControls,
+        semitoneStep: state.semitoneStep,
         pitchCorrection: state.pitchCorrection,
         downloadMaxBitRate: state.downloadMaxBitRate,
         downloadFormat: state.downloadFormat,

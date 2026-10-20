@@ -1,6 +1,13 @@
 jest.mock('../persistence/kvStorage', () => require('../persistence/__mocks__/kvStorage'));
 
-import { FORMAT_PRESETS, migratePlaybackSettings, normalizePlaybackRate, playbackSettingsStore } from '../playbackSettingsStore';
+import {
+  FORMAT_PRESETS,
+  migratePlaybackSettings,
+  normalizePlaybackRate,
+  playbackRateToSemitones,
+  playbackSettingsStore,
+  stepPlaybackRateBySemitones,
+} from '../playbackSettingsStore';
 
 beforeEach(() => {
   playbackSettingsStore.setState({
@@ -57,6 +64,31 @@ describe('playbackSettingsStore', () => {
     expect(normalizePlaybackRate(9)).toBe(3);
     expect(normalizePlaybackRate(1.3000000000000003)).toBe(1.3);
     expect(normalizePlaybackRate(1.04)).toBe(1.05);
+  });
+
+  it('converts speed to semitones', () => {
+    expect(playbackRateToSemitones(1)).toBe(0);
+    expect(playbackRateToSemitones(2)).toBeCloseTo(12, 10);
+    expect(playbackRateToSemitones(0.5)).toBeCloseTo(-12, 10);
+  });
+
+  it('steps speed by semitones and round-trips back to 1x', () => {
+    const up = stepPlaybackRateBySemitones(1, 1);
+    expect(up).toBe(1.059);
+    expect(stepPlaybackRateBySemitones(up, -1)).toBe(1);
+    expect(stepPlaybackRateBySemitones(1, 0.5)).toBe(1.029);
+  });
+
+  it('clamps semitone steps to the supported range', () => {
+    expect(stepPlaybackRateBySemitones(3, 1)).toBe(3);
+    expect(stepPlaybackRateBySemitones(0.25, -1)).toBe(0.25);
+  });
+
+  it('stores the semitone settings', () => {
+    playbackSettingsStore.getState().setShowSemitoneControls(true);
+    playbackSettingsStore.getState().setSemitoneStep(0.5);
+    expect(playbackSettingsStore.getState().showSemitoneControls).toBe(true);
+    expect(playbackSettingsStore.getState().semitoneStep).toBe(0.5);
   });
 
   it('setPlaybackRate updates rate', () => {

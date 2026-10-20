@@ -1,9 +1,11 @@
+import { useMemo } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { useTheme } from '../../hooks/useTheme';
 import { settingsStyles } from '../../styles/settingsStyles';
-import { playbackSettingsStore } from '../../store/playbackSettingsStore';
+import { playbackSettingsStore, SEMITONE_STEPS, type SemitoneStep } from '../../store/playbackSettingsStore';
+import { DropdownRow, type DropdownOption } from './DropdownRow';
 import { SettingsSectionTitle } from './SettingsSectionTitle';
 
 export function PlayerControlsCard() {
@@ -13,6 +15,15 @@ export function PlayerControlsCard() {
   const showSleepTimerButton = playbackSettingsStore((s) => s.showSleepTimerButton);
   const setShowSkipIntervalButtons = playbackSettingsStore((s) => s.setShowSkipIntervalButtons);
   const setShowSleepTimerButton = playbackSettingsStore((s) => s.setShowSleepTimerButton);
+  const showSemitoneControls = playbackSettingsStore((s) => s.showSemitoneControls);
+  const semitoneStep = playbackSettingsStore((s) => s.semitoneStep);
+  const setShowSemitoneControls = playbackSettingsStore((s) => s.setShowSemitoneControls);
+  const setSemitoneStep = playbackSettingsStore((s) => s.setSemitoneStep);
+
+  const stepOptions: DropdownOption<SemitoneStep>[] = useMemo(
+    () => SEMITONE_STEPS.map((v) => ({ value: v, label: t('semitoneStepValue', { value: v }) })),
+    [t],
+  );
 
   return (
     <View style={settingsStyles.section}>
@@ -33,7 +44,7 @@ export function PlayerControlsCard() {
             trackColor={{ false: colors.border, true: colors.primary }}
           />
         </View>
-        <View style={styles.toggleRow}>
+        <View style={[styles.toggleRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
           <View style={styles.textWrap}>
             <Text style={[styles.label, { color: colors.textPrimary }]}>
               {t('showSleepTimerButton')}
@@ -48,6 +59,35 @@ export function PlayerControlsCard() {
             trackColor={{ false: colors.border, true: colors.primary }}
           />
         </View>
+        <View
+          style={[
+            styles.toggleRow,
+            showSemitoneControls && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+          ]}
+        >
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>
+              {t('showSemitoneControls')}
+            </Text>
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>
+              {t('showSemitoneControlsHint')}
+            </Text>
+          </View>
+          <Switch
+            value={showSemitoneControls}
+            onValueChange={setShowSemitoneControls}
+            trackColor={{ false: colors.border, true: colors.primary }}
+          />
+        </View>
+        {showSemitoneControls && (
+          <DropdownRow
+            label={t('semitoneStep')}
+            value={semitoneStep}
+            options={stepOptions}
+            onChange={setSemitoneStep}
+            isLast
+          />
+        )}
       </View>
     </View>
   );
