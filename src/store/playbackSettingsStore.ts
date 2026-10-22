@@ -75,6 +75,14 @@ export const MIN_SPEED_RAMP_MS = 100;
 export const MAX_SPEED_RAMP_MS = 5000;
 export const SPEED_RAMP_STEP_MS = 50;
 
+/** Fixed duration, or constant pitch speed so a bigger change takes longer. */
+export type SpeedRampMode = 'duration' | 'rate';
+/** Constant-rate presets (semitones per second) and the custom slider bounds. */
+export const SPEED_RAMP_RATE_PRESETS = [2, 4, 8, 16] as const;
+export const MIN_SPEED_RAMP_RATE = 1;
+export const MAX_SPEED_RAMP_RATE = 48;
+export const SPEED_RAMP_RATE_STEP = 1;
+
 /** Semitone step sizes offered for the speed sheet's st buttons. */
 export const SEMITONE_STEPS = [0.25, 0.5, 1] as const;
 export type SemitoneStep = (typeof SEMITONE_STEPS)[number];
@@ -178,8 +186,12 @@ export interface PlaybackSettingsState {
   playbackRatePresets: PlaybackRate[];
   /** Glide to a new playback speed instead of jumping, like a turntable. */
   gradualSpeedChange: boolean;
-  /** Duration of the glide in milliseconds. */
+  /** Duration of the glide in milliseconds (`duration` mode). */
   speedRampMs: number;
+  /** How the glide length is chosen. */
+  speedRampMode: SpeedRampMode;
+  /** Pitch speed of the glide in semitones per second (`rate` mode). */
+  speedRampSemitonesPerSec: number;
   /** Show the semitone readout and step buttons in the speed sheet. */
   showSemitoneControls: boolean;
   /** Size of one semitone button press. */
@@ -230,6 +242,8 @@ export interface PlaybackSettingsState {
   setPlaybackRatePresets: (presets: PlaybackRate[]) => void;
   setGradualSpeedChange: (enabled: boolean) => void;
   setSpeedRampMs: (ms: number) => void;
+  setSpeedRampMode: (mode: SpeedRampMode) => void;
+  setSpeedRampSemitonesPerSec: (semitonesPerSec: number) => void;
   setShowSemitoneControls: (show: boolean) => void;
   setSemitoneStep: (step: SemitoneStep) => void;
   setPitchCorrection: (mode: PitchCorrection) => void;
@@ -280,6 +294,8 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       playbackRatePresets: DEFAULT_PLAYBACK_RATE_PRESETS,
       gradualSpeedChange: false,
       speedRampMs: 500,
+      speedRampMode: 'duration',
+      speedRampSemitonesPerSec: 8,
       showSemitoneControls: false,
       semitoneStep: 1,
       pitchCorrection: 'none',
@@ -306,6 +322,8 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       setPlaybackRatePresets: (playbackRatePresets) => set({ playbackRatePresets }),
       setGradualSpeedChange: (gradualSpeedChange) => set({ gradualSpeedChange }),
       setSpeedRampMs: (speedRampMs) => set({ speedRampMs }),
+      setSpeedRampMode: (speedRampMode) => set({ speedRampMode }),
+      setSpeedRampSemitonesPerSec: (speedRampSemitonesPerSec) => set({ speedRampSemitonesPerSec }),
       setShowSemitoneControls: (showSemitoneControls) => set({ showSemitoneControls }),
       setSemitoneStep: (semitoneStep) => set({ semitoneStep }),
       setPitchCorrection: (pitchCorrection) => set({ pitchCorrection }),
@@ -338,6 +356,8 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
         playbackRatePresets: state.playbackRatePresets,
         gradualSpeedChange: state.gradualSpeedChange,
         speedRampMs: state.speedRampMs,
+        speedRampMode: state.speedRampMode,
+        speedRampSemitonesPerSec: state.speedRampSemitonesPerSec,
         showSemitoneControls: state.showSemitoneControls,
         semitoneStep: state.semitoneStep,
         pitchCorrection: state.pitchCorrection,

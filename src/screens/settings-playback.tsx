@@ -15,6 +15,7 @@ import { PlayerControlsCard } from '../components/settings/PlayerControlsCard';
 import { RemoteControlsCard } from '../components/settings/RemoteControlsCard';
 import { ReplayGainCard } from '../components/settings/ReplayGainCard';
 import { SkipIntervalsCard } from '../components/settings/SkipIntervalsCard';
+import { SpeedGlideCard } from '../components/settings/SpeedGlideCard';
 import { StreamingCard } from '../components/settings/StreamingCard';
 import { StreamFormatSheet } from '../components/StreamFormatSheet';
 import { useTheme } from '../hooks/useTheme';
@@ -47,6 +48,12 @@ export function SettingsPlaybackScreen() {
   const playbackMode = playbackSettingsStore((s) => s.playbackMode);
   const crossfadeDurationMs = playbackSettingsStore((s) => s.crossfadeDurationMs);
   const replayGainMode = playbackSettingsStore((s) => s.replayGainMode);
+  const showSemitoneControls = playbackSettingsStore((s) => s.showSemitoneControls);
+  const semitoneStep = playbackSettingsStore((s) => s.semitoneStep);
+  const gradualSpeedChange = playbackSettingsStore((s) => s.gradualSpeedChange);
+  const speedRampMs = playbackSettingsStore((s) => s.speedRampMs);
+  const speedRampMode = playbackSettingsStore((s) => s.speedRampMode);
+  const speedRampSemitonesPerSec = playbackSettingsStore((s) => s.speedRampSemitonesPerSec);
 
   const isDefault =
     maxBitRate === null &&
@@ -63,7 +70,13 @@ export function SettingsPlaybackScreen() {
     lookaheadCount === 3 &&
     playbackMode === 'gapless' &&
     crossfadeDurationMs === 5000 &&
-    replayGainMode === 'off';
+    replayGainMode === 'off' &&
+    !showSemitoneControls &&
+    semitoneStep === 1 &&
+    !gradualSpeedChange &&
+    speedRampMs === 500 &&
+    speedRampMode === 'duration' &&
+    speedRampSemitonesPerSec === 8;
 
   const handleResetDefaults = useCallback(() => {
     confirm({
@@ -88,6 +101,12 @@ export function SettingsPlaybackScreen() {
         s.setPlaybackMode('gapless');
         s.setCrossfadeDurationMs(5000);
         s.setReplayGainMode('off');
+        s.setShowSemitoneControls(false);
+        s.setSemitoneStep(1);
+        s.setGradualSpeedChange(false);
+        s.setSpeedRampMs(500);
+        s.setSpeedRampMode('duration');
+        s.setSpeedRampSemitonesPerSec(8);
         updateRemoteCapabilities();
         void applyLookaheadCacheConfig();
         void applyPlaybackMode();
@@ -111,6 +130,7 @@ export function SettingsPlaybackScreen() {
           <PlaybackModeCard />
           <LookaheadCacheCard />
           <PlayerControlsCard />
+          <SpeedGlideCard />
           <SkipIntervalsCard />
           <RemoteControlsCard />
           {/* Battery-optimization exemption — affects background playback, so it

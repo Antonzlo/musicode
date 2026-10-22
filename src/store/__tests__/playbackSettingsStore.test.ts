@@ -92,6 +92,15 @@ describe('playbackSettingsStore', () => {
     expect(playbackSettingsStore.getState().speedRampMs).toBe(750);
   });
 
+  it('stores the glide style and constant speed', () => {
+    expect(playbackSettingsStore.getState().speedRampMode).toBe('duration');
+    expect(playbackSettingsStore.getState().speedRampSemitonesPerSec).toBe(8);
+    playbackSettingsStore.getState().setSpeedRampMode('rate');
+    playbackSettingsStore.getState().setSpeedRampSemitonesPerSec(12);
+    expect(playbackSettingsStore.getState().speedRampMode).toBe('rate');
+    expect(playbackSettingsStore.getState().speedRampSemitonesPerSec).toBe(12);
+  });
+
   it('stores the semitone settings', () => {
     playbackSettingsStore.getState().setShowSemitoneControls(true);
     playbackSettingsStore.getState().setSemitoneStep(0.5);

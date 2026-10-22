@@ -15,6 +15,7 @@ import { getTrackPlayer, getEqualizer } from 'react-native-queue-player';
 
 import { type EffectiveFormat } from '../types/audio';
 import {
+  playbackRateToSemitones,
   playbackSettingsStore,
   type PitchCorrection,
   type PlaybackRate,
@@ -957,27 +958,33 @@ export async function cycleRepeatMode(): Promise<void> {
   await tp.setRepeatMode(mapRepeatMode(next));
 }
 
-const RATE_RAMP_TICK_MS = 20;
 /** Ramp steps smaller than this are skipped; each one costs a bridge call. */
 const RATE_RAMP_MIN_STEP = 0.002;
-let rateRampTimer: ReturnType<typeof setInterval> | null = null;
+/** Minimum gap between ramp sends, capping 120Hz displays at about 60 calls a second. */
+const RATE_RAMP_MIN_GAP_MS = 15;
+/** Shortest constant-rate glide, so a tiny change still has a step or two. */
+const RATE_RAMP_MIN_MS = 40;
+let rateRampFrame: number | null = null;
 /** Rate last sent to the engine; null until the first change this session. */
 let engineRate: number | null = null;
 
 function cancelRateRamp(): void {
-  if (rateRampTimer) clearInterval(rateRampTimer);
-  rateRampTimer = null;
+  if (rateRampFrame !== null) cancelAnimationFrame(rateRampFrame);
+  rateRampFrame = null;
 }
 
 /**
  * Set the playback rate (persisted store + native engine). With gradual speed
- * changes on, the engine glides from its current rate to the target over
- * `speedRampMs` (ease-out, even in pitch), restarting from wherever it is if
- * the target moves mid-glide. The store always holds the target.
+ * changes on, the engine glides from its current rate to the target, restarting
+ * from wherever it is if the target moves mid-glide. `duration` mode takes a
+ * fixed time with an ease-out; `rate` mode moves at a constant semitones per
+ * second, so a bigger change takes longer. Both move evenly in pitch and step
+ * once per display frame. The store always holds the target.
  */
 export async function applyPlaybackRate(rate: PlaybackRate): Promise<void> {
-  const { playbackRate: previous, gradualSpeedChange, speedRampMs } = playbackSettingsStore.getState();
-  playbackSettingsStore.getState().setPlaybackRate(rate);
+  const state = playbackSettingsStore.getState();
+  const { playbackRate: previous, gradualSpeedChange } = state;
+  state.setPlaybackRate(rate);
   cancelRateRamp();
   const from = engineRate ?? previous;
   if (!gradualSpeedChange || from === rate) {
@@ -985,20 +992,35 @@ export async function applyPlaybackRate(rate: PlaybackRate): Promise<void> {
     await tp.setPlaybackSpeed(rate);
     return;
   }
+  const constantRate = state.speedRampMode === 'rate';
+  const durationMs = constantRate
+    ? Math.max(
+        RATE_RAMP_MIN_MS,
+        (Math.abs(playbackRateToSemitones(rate / from)) / state.speedRampSemitonesPerSec) * 1000,
+      )
+    : state.speedRampMs;
   const startedAt = Date.now();
   let sent = from;
-  rateRampTimer = setInterval(() => {
-    const progress = Math.min(1, (Date.now() - startedAt) / speedRampMs);
-    const eased = 1 - (1 - progress) * (1 - progress);
+  let sentAt = startedAt;
+  const tick = () => {
+    const now = Date.now();
+    const progress = Math.min(1, (now - startedAt) / durationMs);
+    const eased = constantRate ? progress : 1 - (1 - progress) * (1 - progress);
     // Interpolate in log space so pitch moves at an even rate, like a turntable.
     const next = progress === 1 ? rate : Number((from * (rate / from) ** eased).toFixed(3));
-    if (progress === 1) cancelRateRamp();
-    else if (Math.abs(next - sent) < RATE_RAMP_MIN_STEP) return;
+    rateRampFrame = progress === 1 ? null : requestAnimationFrame(tick);
+    const skip =
+      progress < 1
+        ? now - sentAt < RATE_RAMP_MIN_GAP_MS || Math.abs(next - sent) < RATE_RAMP_MIN_STEP
+        : next === sent;
+    if (skip) return;
     sent = next;
+    sentAt = now;
     engineRate = next;
-    // Best-effort: the final tick always sends the exact target.
+    // Best-effort: the final step always sends the exact target.
     tp.setPlaybackSpeed(next).catch(() => {});
-  }, RATE_RAMP_TICK_MS);
+  };
+  rateRampFrame = requestAnimationFrame(tick);
 }
 
 /**

@@ -685,17 +685,33 @@ describe('applyPlaybackRate', () => {
   });
 
   describe('gradual speed change', () => {
+    const realRaf = global.requestAnimationFrame;
+    const realCaf = global.cancelAnimationFrame;
+    const setFrameMs = (ms: number) => {
+      global.requestAnimationFrame = ((cb: (t: number) => void) =>
+        setTimeout(() => cb(Date.now()), ms) as unknown as number) as typeof requestAnimationFrame;
+    };
+
     beforeEach(async () => {
       jest.useFakeTimers();
+      setFrameMs(16);
+      global.cancelAnimationFrame = ((id: number) => clearTimeout(id)) as typeof cancelAnimationFrame;
       playbackSettingsStore.setState({ gradualSpeedChange: false, playbackRate: 1 } as any);
       await applyPlaybackRate(1);
-      playbackSettingsStore.setState({ gradualSpeedChange: true, speedRampMs: 500 } as any);
+      playbackSettingsStore.setState({
+        gradualSpeedChange: true,
+        speedRampMode: 'duration',
+        speedRampMs: 500,
+        speedRampSemitonesPerSec: 8,
+      } as any);
       mockTP.setPlaybackSpeed.mockClear();
     });
 
     afterEach(() => {
       jest.useRealTimers();
-      playbackSettingsStore.setState({ gradualSpeedChange: false } as any);
+      global.requestAnimationFrame = realRaf;
+      global.cancelAnimationFrame = realCaf;
+      playbackSettingsStore.setState({ gradualSpeedChange: false, speedRampMode: 'duration' } as any);
     });
 
     it('stores the target at once and glides the engine up to it', async () => {
@@ -744,6 +760,60 @@ describe('applyPlaybackRate', () => {
 
       jest.advanceTimersByTime(500);
       expect(mockTP.setPlaybackSpeed).toHaveBeenLastCalledWith(1);
+    });
+
+    it('caps sends on high refresh rate displays', async () => {
+      setFrameMs(4);
+      await applyPlaybackRate(2);
+      jest.advanceTimersByTime(500);
+      // 500ms at a 15ms minimum gap is at most ~34 sends, not the 125 frames.
+      expect(mockTP.setPlaybackSpeed.mock.calls.length).toBeLessThanOrEqual(35);
+      expect(mockTP.setPlaybackSpeed).toHaveBeenLastCalledWith(2);
+    });
+
+    describe('constant speed mode', () => {
+      beforeEach(() => {
+        playbackSettingsStore.setState({ speedRampMode: 'rate', speedRampSemitonesPerSec: 8 } as any);
+      });
+
+      it('takes longer for a bigger change', async () => {
+        await applyPlaybackRate(2); // 12 st at 8 st/s: 1.5 s
+        jest.advanceTimersByTime(1400);
+        expect(mockTP.setPlaybackSpeed).not.toHaveBeenCalledWith(2);
+        jest.advanceTimersByTime(200);
+        expect(mockTP.setPlaybackSpeed).toHaveBeenLastCalledWith(2);
+      });
+
+      it('finishes a small change quickly', async () => {
+        await applyPlaybackRate(1.25); // 3.86 st at 8 st/s: about 0.48 s
+        jest.advanceTimersByTime(600);
+        expect(mockTP.setPlaybackSpeed).toHaveBeenLastCalledWith(1.25);
+      });
+
+      it('moves at an even pitch speed with no easing', async () => {
+        await applyPlaybackRate(2);
+        jest.advanceTimersByTime(1700);
+        const rates = [1, ...mockTP.setPlaybackSpeed.mock.calls.map((c: number[]) => c[0])];
+        const steps = rates.slice(1, -1).map((r, i) => 12 * Math.log2(r / rates[i]));
+        const mid = steps.slice(2, -2);
+        expect(Math.max(...mid) - Math.min(...mid)).toBeLessThan(0.05);
+      });
+
+      it('times a retarget from the current engine rate', async () => {
+        await applyPlaybackRate(2);
+        jest.advanceTimersByTime(750); // halfway: about 6 st from 1x
+        await applyPlaybackRate(1); // about 6 st back at 8 st/s: about 0.75 s
+        jest.advanceTimersByTime(700);
+        expect(mockTP.setPlaybackSpeed).not.toHaveBeenLastCalledWith(1);
+        jest.advanceTimersByTime(150);
+        expect(mockTP.setPlaybackSpeed).toHaveBeenLastCalledWith(1);
+      });
+
+      it('still glides a tiny change over the minimum duration', async () => {
+        await applyPlaybackRate(1.01);
+        jest.advanceTimersByTime(100);
+        expect(mockTP.setPlaybackSpeed).toHaveBeenLastCalledWith(1.01);
+      });
     });
 
     it('jumps straight to the rate when it already matches', async () => {
