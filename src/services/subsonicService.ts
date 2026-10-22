@@ -356,6 +356,23 @@ export function getDownloadStreamUrl(trackId: string): string | null {
   return `${base}?${params.toString()}`;
 }
 
+/**
+ * Build an authenticated URL for the original, untranscoded file of a track
+ * (`download.view`), for saving it to the device as-is.
+ */
+export function getOriginalFileUrl(trackId: string): string | null {
+  const { isLoggedIn, serverUrl, username } = authStore.getState();
+  if (!trackId || !isLoggedIn || !serverUrl || !username) return null;
+  if (cachedCoverArtKey === null || !cachedCoverArtToken) return null;
+  const params = new URLSearchParams({
+    id: trackId,
+    v: SUBSONIC_API_VERSION,
+    c: SUBSONIC_CLIENT_NAME,
+  });
+  applyUrlAuth(params, username);
+  return `${normalizeServerUrl(serverUrl)}/rest/download.view?${params.toString()}`;
+}
+
 export async function getRecentlyAddedAlbums(size?: number): Promise<AlbumID3[]> {
   const api = getApi();
   if (!api) return [];

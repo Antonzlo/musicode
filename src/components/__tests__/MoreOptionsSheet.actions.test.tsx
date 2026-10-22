@@ -166,7 +166,14 @@ jest.mock('../../services/moreOptionsService', () => ({
   toggleStar: jest.fn(),
 }));
 
-jest.mock('../../services/musicCacheService', () => ({ deleteCachedItem: jest.fn() }));
+jest.mock('../../services/musicCacheService', () => ({
+  deleteCachedItem: jest.fn(),
+  getLocalTrackUri: jest.fn(() => null),
+}));
+jest.mock('../../services/trackExportService', () => ({
+  pickExportDirectory: jest.fn(),
+  saveTrackToDirectory: jest.fn(),
+}));
 jest.mock('../../services/subsonicService', () => ({
   deletePlaylist: jest.fn(),
   isVariousArtists: () => mockIsVA,
@@ -242,6 +249,8 @@ import { MoreOptionsSheet } from '../MoreOptionsSheet';
 import { CachedImage } from '../CachedImage';
 import { moreOptionsStore, type MoreOptionsEntity, type MoreOptionsSource } from '../../store/moreOptionsStore';
 import { processingOverlayStore } from '../../store/processingOverlayStore';
+import { getLocalTrackUri } from '../../services/musicCacheService';
+import { pickExportDirectory, saveTrackToDirectory } from '../../services/trackExportService';
 import { resolveCoverArtId } from '../../services/imageCacheService';
 import {
   addAlbumToQueue,
@@ -333,6 +342,7 @@ const ALL_OPTIONS = [
   'Set MusicBrainz ID',
   'Exclude from Scrobbling',
   'Download Song',
+  'Save as file',
   'Remove Download',
   'Download',
   'Delete Playlist',
@@ -398,6 +408,7 @@ describe('MoreOptionsSheet — options per entity (online, default source)', () 
       'Share',
       'Track Details',
       'Download Song',
+      'Save as file',
     ]);
   });
 
@@ -1074,6 +1085,58 @@ describe('MoreOptionsSheet — downloads', () => {
     fireEvent.press(screen.getByText('Download Song'));
     sheetClosed();
     await waitFor(() => expect(handleDownloadSong).toHaveBeenCalledWith(song));
+  });
+
+  describe('Save as file', () => {
+    const directory = { uri: 'content://tree/music' };
+
+    it('picks a folder and saves the song into it', async () => {
+      (pickExportDirectory as jest.Mock).mockResolvedValue(directory);
+      (saveTrackToDirectory as jest.Mock).mockResolvedValue(undefined);
+      open(songEntity);
+      fireEvent.press(screen.getByText('Save as file'));
+      sheetClosed();
+      await waitFor(() => expect(saveTrackToDirectory).toHaveBeenCalledWith(song, directory));
+      await waitFor(() =>
+        expect(processingOverlayStore.getState()).toMatchObject({ status: 'success', label: 'File saved' }),
+      );
+    });
+
+    it('saves nothing when the folder picker is dismissed', async () => {
+      (pickExportDirectory as jest.Mock).mockResolvedValue(null);
+      open(songEntity);
+      fireEvent.press(screen.getByText('Save as file'));
+      await waitFor(() => expect(pickExportDirectory).toHaveBeenCalled());
+      expect(saveTrackToDirectory).not.toHaveBeenCalled();
+    });
+
+    it('shows an error when saving fails', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      (pickExportDirectory as jest.Mock).mockResolvedValue(directory);
+      (saveTrackToDirectory as jest.Mock).mockRejectedValue(new Error('disk full'));
+      open(songEntity);
+      fireEvent.press(screen.getByText('Save as file'));
+      await waitFor(() =>
+        expect(processingOverlayStore.getState()).toMatchObject({
+          status: 'error',
+          label: 'Could not save the file',
+        }),
+      );
+      warn.mockRestore();
+    });
+
+    it('is hidden offline unless the song is on the device', () => {
+      mockOfflineMode = true;
+      open(songEntity);
+      expect(screen.queryByText('Save as file')).toBeNull();
+    });
+
+    it('is offered offline for a downloaded song', () => {
+      mockOfflineMode = true;
+      (getLocalTrackUri as jest.Mock).mockReturnValueOnce('file:///music/s1.flac');
+      open(songEntity);
+      expect(screen.getByText('Save as file')).toBeTruthy();
+    });
   });
 
   it('Remove Download on a song releases its per-song claim', () => {

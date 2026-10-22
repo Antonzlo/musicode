@@ -42,7 +42,7 @@ import {
   toggleStar,
 } from '../services/moreOptionsService';
 import { resolveCoverArtId, type CoverSubject } from '../services/imageCacheService';
-import { deleteCachedItem } from '../services/musicCacheService';
+import { deleteCachedItem, getLocalTrackUri } from '../services/musicCacheService';
 import {
   deletePlaylist,
   isVariousArtists,
@@ -69,6 +69,7 @@ import { getArtistBioRow } from '../db/repository/details';
 import { deletePlaylist as deletePlaylistRow } from '../db/repository/playlists';
 import { bumpDetailChanged } from '../db/detailNotifier';
 import { runWithOverlay } from '../store/processingOverlayStore';
+import { pickExportDirectory, saveTrackToDirectory } from '../services/trackExportService';
 import { canUserShare, supports } from '../services/serverCapabilityService';
 import { setRatingStore } from '../store/setRatingStore';
 
@@ -500,6 +501,20 @@ export function MoreOptionsSheet() {
     await handleDownloadSong(song);
   }, [entity, handleClose]);
 
+  const handleSaveSongAsFile = useCallback(async () => {
+    if (!entity || entity.type !== 'song') return;
+    const song = entity.item as Child;
+    // The sheet's Modal must be gone before the system folder picker opens.
+    await moreOptionsStore.getState().hideAndAwait();
+    const directory = await pickExportDirectory();
+    if (!directory) return;
+    await runWithOverlay(() => saveTrackToDirectory(song, directory), {
+      loading: t('savingSongFile'),
+      success: t('songFileSaved'),
+      error: t('songFileSaveFailed'),
+    });
+  }, [entity, t]);
+
   const handleSongRemoveDownload = useCallback(() => {
     if (!entity || entity.type !== 'song') return;
     const song = entity.item as Child;
@@ -669,6 +684,9 @@ export function MoreOptionsSheet() {
     entity?.type === 'song' &&
     !offline &&
     songDownloadStatus === 'none';
+  // Saving as a file needs the server unless the song is already on the device.
+  const showSaveSongAsFile =
+    entity?.type === 'song' && (!offline || getLocalTrackUri(entity.item.id) !== null);
   const showDelete = !offline && canDeletePlaylist(entity);
   const isVA = entity?.type === 'artist' && isVariousArtists(entity.item.name);
   const showSaveTopSongsPlaylist = !offline && entity?.type === 'artist' && !isVA;
@@ -905,6 +923,16 @@ export function MoreOptionsSheet() {
                   icon={<Ionicons name="arrow-down-circle-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
                   label={t('downloadSong')}
                   onPress={handleSongDownload}
+                  divider
+                />
+              )}
+
+              {/* Save the song's file to a folder on the device */}
+              {showSaveSongAsFile && (
+                <MoreOptionsRow
+                  icon={<Ionicons name="save-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
+                  label={t('saveSongAsFile')}
+                  onPress={handleSaveSongAsFile}
                   divider
                 />
               )}

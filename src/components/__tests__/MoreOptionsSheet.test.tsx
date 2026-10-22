@@ -92,7 +92,10 @@ jest.mock('../../services/moreOptionsService', () => ({
   toggleStar: jest.fn(),
 }));
 
-jest.mock('../../services/musicCacheService', () => ({ deleteCachedItem: jest.fn() }));
+jest.mock('../../services/musicCacheService', () => ({
+  deleteCachedItem: jest.fn(),
+  getLocalTrackUri: jest.fn(() => null),
+}));
 jest.mock('../../services/subsonicService', () => ({
   deletePlaylist: jest.fn(),
   isVariousArtists: () => false,

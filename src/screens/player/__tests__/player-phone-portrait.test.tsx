@@ -249,6 +249,7 @@ jest.mock('@shopify/flash-list', () => {
 import React from 'react';
 import { render, fireEvent, act } from '@testing-library/react-native';
 
+import { offlineModeStore } from '@/store/offlineModeStore';
 import { appStateStore } from '@/store/appStateStore';
 import { lyricsStore } from '@/store/lyricsStore';
 import { playerStore } from '@/store/playerStore';
@@ -576,5 +577,70 @@ describe('PlayerPhonePortrait', () => {
 
     // Queue items should still be rendered (mounted)
     expect(getByText('Second Song')).toBeTruthy();
+  });
+
+  describe('artist link', () => {
+    const TRACK_WITH_ARTIST = { ...MOCK_TRACK, artistId: 'artist-1' } as Child;
+    const push = jest.fn();
+
+    beforeEach(() => {
+      push.mockClear();
+      jest.spyOn(require('expo-router'), 'useRouter').mockReturnValue({ back: jest.fn(), push });
+      offlineModeStore.setState({ offlineMode: false });
+    });
+
+    it('opens the artist page when the artist name is pressed', () => {
+      playerStore.setState({ currentTrack: TRACK_WITH_ARTIST });
+      const { getByLabelText } = render(<PlayerPhonePortrait />);
+      fireEvent.press(getByLabelText('Go to Artist'));
+      expect(push).toHaveBeenCalledWith('/artist/artist-1');
+    });
+
+    it('is plain text without an artist id', () => {
+      const { queryByLabelText, getByText } = render(<PlayerPhonePortrait />);
+      expect(getByText('Test Artist')).toBeTruthy();
+      expect(queryByLabelText('Go to Artist')).toBeNull();
+    });
+
+    it('is plain text offline', () => {
+      playerStore.setState({ currentTrack: TRACK_WITH_ARTIST });
+      offlineModeStore.setState({ offlineMode: true });
+      const { queryByLabelText } = render(<PlayerPhonePortrait />);
+      expect(queryByLabelText('Go to Artist')).toBeNull();
+    });
+  });
+
+  describe('quality badge', () => {
+    const FLAC_TRACK = {
+      ...MOCK_TRACK,
+      suffix: 'flac',
+      contentType: 'audio/flac',
+      bitDepth: 16,
+      samplingRate: 44100,
+    } as Child;
+
+    const layout = (node: unknown, height: number) =>
+      fireEvent(node as never, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 300, height } } });
+
+    it('shows once the gap above the controls can hold it', () => {
+      playerStore.setState({ currentTrack: FLAC_TRACK });
+      const { getByTestId, queryByText } = render(<PlayerPhonePortrait />);
+      expect(queryByText(/FLAC/)).toBeNull();
+      layout(getByTestId('player-format-badge-gap'), 80);
+      expect(queryByText(/FLAC/)).toBeTruthy();
+    });
+
+    it('stays hidden when the gap is too small', () => {
+      playerStore.setState({ currentTrack: FLAC_TRACK });
+      const { getByTestId, queryByText } = render(<PlayerPhonePortrait />);
+      layout(getByTestId('player-format-badge-gap'), 20);
+      expect(queryByText(/FLAC/)).toBeNull();
+    });
+
+    it('is absent when the track has no known format', () => {
+      const { getByTestId, queryByText } = render(<PlayerPhonePortrait />);
+      layout(getByTestId('player-format-badge-gap'), 80);
+      expect(queryByText(/FLAC|MP3/)).toBeNull();
+    });
   });
 });

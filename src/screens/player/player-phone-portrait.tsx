@@ -29,6 +29,7 @@ import { BookmarkButton } from '@/components/BookmarkButton';
 import { CachedImage } from '@/components/CachedImage';
 import { CastButton } from '@/components/RoutePicker';
 import { FavoriteButton } from '@/components/FavoriteButton';
+import { FormatBadge } from '@/components/FormatBadge';
 import { EmptyState } from '@/components/EmptyState';
 import { MarqueeText } from '@/components/MarqueeText';
 import { MoreOptionsButton } from '@/components/MoreOptionsButton';
@@ -60,6 +61,7 @@ import {
   skipToPrevious,
   togglePlayPause,
 } from '@/services/playerService';
+import { getEffectiveFormat } from '@/utils/effectiveFormat';
 import { sanitizeBiographyText } from '@/utils/formatters';
 import { type Child } from '@/services/subsonicService';
 import { usePlayerAlbumInfo } from '@/hooks/usePlayerAlbumInfo';
@@ -74,6 +76,9 @@ import { absoluteFill } from '@/utils/styles';
 const HERO_PADDING = 32;
 const HERO_COVER_SIZE = 600;
 const HEADER_BAR_HEIGHT = Platform.OS === 'ios' ? 44 : 56;
+
+/** Smallest spacer height (dp) that fits the quality badge. */
+const FORMAT_BADGE_MIN_GAP = 32;
 
 const TAB_FADE_DURATION = 300;
 const TAB_FADE_EASING = Easing.out(Easing.cubic);
@@ -475,6 +480,14 @@ const PlayerContent = memo(function PlayerContent({
   const showSleepTimer = playbackSettingsStore((s) => s.showSleepTimerButton);
   const { canSkipNext, canSkipPrevious } = useCanSkip();
 
+  const router = useRouter();
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
+  const effectiveFormat = useMemo(() => getEffectiveFormat(currentTrack), [currentTrack]);
+  // The badge sits in the spacer above the transport row; on short screens that
+  // gap can be smaller than the badge, so it only shows when it fits.
+  const [badgeGap, setBadgeGap] = useState(0);
+  const showFormatBadge = effectiveFormat !== null && badgeGap >= FORMAT_BADGE_MIN_GAP;
+
   // Content-height budget (window minus header + top/bottom safe-area insets)
   // and the portrait width drive the responsive tier: smaller art/controls/
   // fonts on short OR narrow screens, and the secondary controls row is dropped
@@ -558,12 +571,29 @@ const PlayerContent = memo(function PlayerContent({
             <MarqueeText style={marqueeStyle}>
               {currentTrack.title}
             </MarqueeText>
-            <Text
-              style={[styles.trackArtist, { color: colors.textSecondary, fontSize: m.artistFont }]}
-              numberOfLines={1}
-            >
-              {currentTrack.artist ?? t('unknownArtist')}
-            </Text>
+            {currentTrack.artistId && !offlineMode ? (
+              <Pressable
+                onPress={() => router.push(`/artist/${currentTrack.artistId}`)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t('goToArtist')}
+                style={({ pressed }) => [styles.trackArtistPress, pressed && styles.pressed]}
+              >
+                <Text
+                  style={[styles.trackArtist, { color: colors.textSecondary, fontSize: m.artistFont }]}
+                  numberOfLines={1}
+                >
+                  {currentTrack.artist ?? t('unknownArtist')}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text
+                style={[styles.trackArtist, { color: colors.textSecondary, fontSize: m.artistFont }]}
+                numberOfLines={1}
+              >
+                {currentTrack.artist ?? t('unknownArtist')}
+              </Text>
+            )}
             <CastButton />
           </View>
           <FavoriteButton trackId={currentTrack.id} style={styles.favoriteButton} />
@@ -589,7 +619,17 @@ const PlayerContent = memo(function PlayerContent({
           and below the secondary row) evenly distribute the controls in the
           space under the progress bar — this centers the primary row between
           the progress bar and the secondary row. */}
-      <View style={styles.playerSpacer} />
+      <View
+        testID="player-format-badge-gap"
+        style={styles.playerSpacer}
+        onLayout={(e) => setBadgeGap(e.nativeEvent.layout.height)}
+      >
+        {showFormatBadge && (
+          <View style={styles.formatBadgeSlot} pointerEvents="none">
+            <FormatBadge format={effectiveFormat} textColor={colors.textPrimary} />
+          </View>
+        )}
+      </View>
 
       {/* Playback controls */}
       <View style={[styles.controls, { paddingVertical: m.controlsPadV }]}>
@@ -876,6 +916,15 @@ const styles = StyleSheet.create({
   },
   playerSpacer: {
     flex: 1,
+  },
+  // Absolutely positioned inside the spacer so it never changes the layout.
+  formatBadgeSlot: {
+    ...absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trackArtistPress: {
+    alignSelf: 'flex-start',
   },
   hero: {
     width: '100%',
