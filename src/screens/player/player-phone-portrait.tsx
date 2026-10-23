@@ -626,7 +626,11 @@ const PlayerContent = memo(function PlayerContent({
       >
         {showFormatBadge && (
           <View style={styles.formatBadgeSlot} pointerEvents="none">
-            <FormatBadge format={effectiveFormat} textColor={colors.textPrimary} />
+            {/* FormatBadge pins itself to the start of its parent (alignSelf),
+                so it needs a shrink-wrapped wrapper for the slot to centre. */}
+            <View>
+              <FormatBadge format={effectiveFormat} textColor={colors.textPrimary} />
+            </View>
           </View>
         )}
       </View>
