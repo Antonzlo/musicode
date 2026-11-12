@@ -20,7 +20,7 @@ jest.mock('expo-file-system', () => {
     }
     copy = (dest: unknown) => {
       mockStagedExists = true;
-      mockCopy(this.uri, dest);
+      return mockCopy(this.uri, dest);
     };
     delete = () => {
       mockStagedExists = false;
@@ -69,6 +69,7 @@ beforeEach(() => {
   mockGetLocalTrackUri.mockReturnValue(null);
   mockGetOriginalFileUrl.mockReturnValue('https://server/rest/download.view?id=s1');
   mockDownload.mockResolvedValue(undefined);
+  mockCopy.mockResolvedValue(undefined);
 });
 
 describe('exportFileName', () => {
@@ -124,6 +125,31 @@ describe('saveTrackToDirectory', () => {
       uri: 'file:///cache/exports/Band - Song.mp3',
     }));
     expect(mockCopy).toHaveBeenNthCalledWith(2, 'file:///cache/exports/Band - Song.mp3', target);
+  });
+
+  it('keeps the staged file until the native copy has finished', async () => {
+    let finishCopy!: () => void;
+    mockCopy.mockReturnValueOnce(new Promise<void>((resolve) => { finishCopy = resolve; }));
+    const saving = saveTrackToDirectory(song, target);
+    await new Promise((r) => setImmediate(r));
+    expect(mockCopy).toHaveBeenCalledTimes(1);
+    expect(mockDelete).not.toHaveBeenCalled();
+    finishCopy();
+    await saving;
+    expect(mockDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for the copy of a downloaded song before checking the staged size', async () => {
+    mockGetLocalTrackUri.mockReturnValue('file:///music/s1.mp3');
+    mockStagedExists = false;
+    let finishCopy!: () => void;
+    mockCopy.mockReturnValueOnce(new Promise<void>((resolve) => { finishCopy = resolve; }));
+    const saving = saveTrackToDirectory(song, target);
+    await new Promise((r) => setImmediate(r));
+    expect(mockCopy).toHaveBeenCalledTimes(1);
+    finishCopy();
+    await saving;
+    expect(mockCopy).toHaveBeenCalledTimes(2);
   });
 
   it('fails without a server URL', async () => {

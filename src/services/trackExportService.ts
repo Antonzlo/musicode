@@ -41,7 +41,7 @@ export async function saveTrackToDirectory(track: Child, directory: Directory): 
 
   try {
     if (localUri) {
-      new File(localUri).copy(staged);
+      await new File(localUri).copy(staged);
     } else {
       await ensureCoverArtAuth();
       const url = getOriginalFileUrl(track.id);
@@ -49,7 +49,8 @@ export async function saveTrackToDirectory(track: Child, directory: Directory): 
       await File.downloadFileAsync(url, staged, { idempotent: true });
     }
     if (!staged.exists || !staged.size) throw new Error('Empty file');
-    staged.copy(directory);
+    // Native copy is async; the staged file must outlive it.
+    await staged.copy(directory);
   } finally {
     if (staged.exists) staged.delete();
   }
