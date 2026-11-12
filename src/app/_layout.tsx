@@ -83,6 +83,7 @@ import { migrationGateStore } from '../store/migrationGateStore';
 import { connectivityStore } from '../store/connectivityStore';
 import { deferredMusicCacheInit, getMusicCacheStats, initMusicCache } from '../services/musicCacheService';
 import { checkStorageLimit } from '../services/storageService';
+import { initMusicHaptics } from '../services/musicHapticsService';
 import { initPlayer, removeNonDownloadedTracks, restorePersistedQueueAfterBoot } from '../services/playerService';
 import { refreshHeadlessMediaSnapshot } from '../services/headlessMediaService';
 import { flushPersistedQueue } from '../services/queuePersistenceService';
@@ -553,6 +554,7 @@ export default function RootLayout() {
       // queueRestoreStartedRef effect below); its heavy RNTP hydration freezes the
       // splash animation mid-sweep.
       initPlayer();
+      initMusicHaptics();
 
       // Everything below talks to the server or to tables a migration may be rewriting.
       // `initPlayer` stays eager on purpose (see above); the rest waits, because

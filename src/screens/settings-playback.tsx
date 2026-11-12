@@ -10,6 +10,7 @@ import { BackgroundPlaybackCard } from '../components/settings/BackgroundPlaybac
 import { DownloadingCard } from '../components/settings/DownloadingCard';
 import { EqualizerCard } from '../components/settings/EqualizerCard';
 import { LookaheadCacheCard } from '../components/settings/LookaheadCacheCard';
+import { MusicHapticsCard } from '../components/settings/MusicHapticsCard';
 import { PlaybackModeCard } from '../components/settings/PlaybackModeCard';
 import { PlayerControlsCard } from '../components/settings/PlayerControlsCard';
 import { RemoteControlsCard } from '../components/settings/RemoteControlsCard';
@@ -48,6 +49,8 @@ export function SettingsPlaybackScreen() {
   const playbackMode = playbackSettingsStore((s) => s.playbackMode);
   const crossfadeDurationMs = playbackSettingsStore((s) => s.crossfadeDurationMs);
   const replayGainMode = playbackSettingsStore((s) => s.replayGainMode);
+  const musicHaptics = playbackSettingsStore((s) => s.musicHaptics);
+  const hapticsBluetoothDelayMs = playbackSettingsStore((s) => s.hapticsBluetoothDelayMs);
   const showSemitoneControls = playbackSettingsStore((s) => s.showSemitoneControls);
   const semitoneStep = playbackSettingsStore((s) => s.semitoneStep);
   const gradualSpeedChange = playbackSettingsStore((s) => s.gradualSpeedChange);
@@ -71,6 +74,8 @@ export function SettingsPlaybackScreen() {
     playbackMode === 'gapless' &&
     crossfadeDurationMs === 5000 &&
     replayGainMode === 'off' &&
+    !musicHaptics &&
+    hapticsBluetoothDelayMs === 0 &&
     !showSemitoneControls &&
     semitoneStep === 1 &&
     !gradualSpeedChange &&
@@ -101,6 +106,8 @@ export function SettingsPlaybackScreen() {
         s.setPlaybackMode('gapless');
         s.setCrossfadeDurationMs(5000);
         s.setReplayGainMode('off');
+        s.setMusicHaptics(false);
+        s.setHapticsBluetoothDelayMs(0);
         s.setShowSemitoneControls(false);
         s.setSemitoneStep(1);
         s.setGradualSpeedChange(false);
@@ -131,6 +138,7 @@ export function SettingsPlaybackScreen() {
           <LookaheadCacheCard />
           <PlayerControlsCard />
           <SpeedGlideCard />
+          <MusicHapticsCard />
           <SkipIntervalsCard />
           <RemoteControlsCard />
           {/* Battery-optimization exemption — affects background playback, so it

@@ -83,6 +83,10 @@ export const MIN_SPEED_RAMP_RATE = 1;
 export const MAX_SPEED_RAMP_RATE = 48;
 export const SPEED_RAMP_RATE_STEP = 1;
 
+/** Longest Bluetooth delay for the music haptics, and the slider step (ms). */
+export const MAX_HAPTICS_BLUETOOTH_DELAY_MS = 1000;
+export const HAPTICS_BLUETOOTH_DELAY_STEP_MS = 10;
+
 /** Semitone step sizes offered for the speed sheet's st buttons. */
 export const SEMITONE_STEPS = [0.25, 0.5, 1] as const;
 export type SemitoneStep = (typeof SEMITONE_STEPS)[number];
@@ -192,6 +196,10 @@ export interface PlaybackSettingsState {
   speedRampMode: SpeedRampMode;
   /** Pitch speed of the glide in semitones per second (`rate` mode). */
   speedRampSemitonesPerSec: number;
+  /** Vibrate to the beat of the music while it plays. */
+  musicHaptics: boolean;
+  /** Delay the vibration by this many ms while the output is Bluetooth. */
+  hapticsBluetoothDelayMs: number;
   /** Show the semitone readout and step buttons in the speed sheet. */
   showSemitoneControls: boolean;
   /** Size of one semitone button press. */
@@ -244,6 +252,8 @@ export interface PlaybackSettingsState {
   setSpeedRampMs: (ms: number) => void;
   setSpeedRampMode: (mode: SpeedRampMode) => void;
   setSpeedRampSemitonesPerSec: (semitonesPerSec: number) => void;
+  setMusicHaptics: (enabled: boolean) => void;
+  setHapticsBluetoothDelayMs: (ms: number) => void;
   setShowSemitoneControls: (show: boolean) => void;
   setSemitoneStep: (step: SemitoneStep) => void;
   setPitchCorrection: (mode: PitchCorrection) => void;
@@ -296,6 +306,8 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       speedRampMs: 500,
       speedRampMode: 'duration',
       speedRampSemitonesPerSec: 8,
+      musicHaptics: false,
+      hapticsBluetoothDelayMs: 0,
       showSemitoneControls: false,
       semitoneStep: 1,
       pitchCorrection: 'none',
@@ -324,6 +336,8 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       setSpeedRampMs: (speedRampMs) => set({ speedRampMs }),
       setSpeedRampMode: (speedRampMode) => set({ speedRampMode }),
       setSpeedRampSemitonesPerSec: (speedRampSemitonesPerSec) => set({ speedRampSemitonesPerSec }),
+      setMusicHaptics: (musicHaptics) => set({ musicHaptics }),
+      setHapticsBluetoothDelayMs: (hapticsBluetoothDelayMs) => set({ hapticsBluetoothDelayMs }),
       setShowSemitoneControls: (showSemitoneControls) => set({ showSemitoneControls }),
       setSemitoneStep: (semitoneStep) => set({ semitoneStep }),
       setPitchCorrection: (pitchCorrection) => set({ pitchCorrection }),
@@ -358,6 +372,8 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
         speedRampMs: state.speedRampMs,
         speedRampMode: state.speedRampMode,
         speedRampSemitonesPerSec: state.speedRampSemitonesPerSec,
+        musicHaptics: state.musicHaptics,
+        hapticsBluetoothDelayMs: state.hapticsBluetoothDelayMs,
         showSemitoneControls: state.showSemitoneControls,
         semitoneStep: state.semitoneStep,
         pitchCorrection: state.pitchCorrection,
