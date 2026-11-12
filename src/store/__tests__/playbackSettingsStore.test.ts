@@ -101,6 +101,12 @@ describe('playbackSettingsStore', () => {
     expect(playbackSettingsStore.getState().speedRampSemitonesPerSec).toBe(12);
   });
 
+  it('stores the haptics mode, defaulting to beat pulses', () => {
+    expect(playbackSettingsStore.getState().hapticsMode).toBe('beat');
+    playbackSettingsStore.getState().setHapticsMode('system');
+    expect(playbackSettingsStore.getState().hapticsMode).toBe('system');
+  });
+
   it('stores the semitone settings', () => {
     playbackSettingsStore.getState().setShowSemitoneControls(true);
     playbackSettingsStore.getState().setSemitoneStep(0.5);

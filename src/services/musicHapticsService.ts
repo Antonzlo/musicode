@@ -1,4 +1,5 @@
 import * as Haptics from 'expo-haptics';
+import { setSystemHapticsEnabled } from 'expo-system-haptics';
 import { getCastManager, getVisualizer } from 'react-native-queue-player';
 
 import { playbackSettingsStore } from '../store/playbackSettingsStore';
@@ -13,6 +14,7 @@ const HEAVY_RATIO = 3;
 
 let initialised = false;
 let lastKey = '';
+let lastSystemWanted: boolean | null = null;
 let stopVisualizer: (() => void) | null = null;
 let outputIsBluetooth = false;
 const pendingTicks = new Set<ReturnType<typeof setTimeout>>();
@@ -70,18 +72,27 @@ function start(): void {
 }
 
 function sync(): void {
-  const { musicHaptics } = playbackSettingsStore.getState();
+  const { musicHaptics, hapticsMode } = playbackSettingsStore.getState();
   const { playbackState, currentTrack } = playerStore.getState();
+
+  // The system generator runs inside the audio pipeline; the app only switches it.
+  const systemWanted = musicHaptics && hapticsMode === 'system';
+  if (systemWanted !== lastSystemWanted) {
+    lastSystemWanted = systemWanted;
+    setSystemHapticsEnabled(systemWanted);
+  }
+
+  const beatWanted = musicHaptics && hapticsMode === 'beat' && playbackState === 'playing';
   // Position ticks also reach here; only a real change of setting, state or
   // track re-evaluates, so a source without FFT is not re-subscribed every second.
-  const key = `${musicHaptics}|${playbackState}|${currentTrack?.id ?? ''}`;
+  const key = `${beatWanted}|${currentTrack?.id ?? ''}`;
   if (key === lastKey) return;
   lastKey = key;
   stop();
-  if (musicHaptics && playbackState === 'playing') start();
+  if (beatWanted) start();
 }
 
-/** Vibrate to the beat while music plays; call once at startup. */
+/** Vibrate with the music while it plays (beat pulses or the system generator); call once at startup. */
 export function initMusicHaptics(): void {
   if (initialised) return;
   initialised = true;

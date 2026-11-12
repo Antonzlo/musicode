@@ -4,6 +4,8 @@ jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
 }));
 
+jest.mock('expo-system-haptics', () => ({ setSystemHapticsEnabled: jest.fn() }));
+
 const SAMPLE_RATE = 44100;
 
 function frame(energy: number) {
@@ -36,6 +38,7 @@ function load(opts: { castThrows?: boolean } = {}) {
     };
   });
   const Haptics = require('expo-haptics');
+  const system = require('expo-system-haptics');
   const { playbackSettingsStore } = require('../../store/playbackSettingsStore');
   const { playerStore } = require('../../store/playerStore');
   const { initMusicHaptics } = require('../musicHapticsService');
@@ -44,6 +47,7 @@ function load(opts: { castThrows?: boolean } = {}) {
     dispose,
     subscribe,
     Haptics,
+    system,
     settings: playbackSettingsStore,
     player: playerStore,
     init: initMusicHaptics as () => void,
@@ -251,5 +255,57 @@ describe('Bluetooth delay', () => {
     env.player.setState({ playbackState: 'paused' });
     jest.advanceTimersByTime(1000);
     expect(env.Haptics.impactAsync).not.toHaveBeenCalled();
+  });
+});
+
+describe('system haptics mode', () => {
+  it('switches the system generator on and skips the beat pulses', () => {
+    const env = load();
+    env.settings.setState({ hapticsMode: 'system' });
+    startPlaying(env);
+    expect(env.system.setSystemHapticsEnabled).toHaveBeenLastCalledWith(true);
+    expect(env.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('keeps the system generator off in beat mode', () => {
+    const env = load();
+    startPlaying(env);
+    expect(env.system.setSystemHapticsEnabled).toHaveBeenLastCalledWith(false);
+    expect(env.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands over from beat pulses to the system generator', () => {
+    const env = load();
+    startPlaying(env);
+    env.settings.setState({ hapticsMode: 'system' });
+    expect(env.dispose).toHaveBeenCalledTimes(1);
+    expect(env.system.setSystemHapticsEnabled).toHaveBeenLastCalledWith(true);
+  });
+
+  it('hands over from the system generator to beat pulses', () => {
+    const env = load();
+    env.settings.setState({ hapticsMode: 'system' });
+    startPlaying(env);
+    env.settings.setState({ hapticsMode: 'beat' });
+    expect(env.system.setSystemHapticsEnabled).toHaveBeenLastCalledWith(false);
+    expect(env.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('switches the system generator off with the setting', () => {
+    const env = load();
+    env.settings.setState({ hapticsMode: 'system' });
+    startPlaying(env);
+    env.settings.setState({ musicHaptics: false });
+    expect(env.system.setSystemHapticsEnabled).toHaveBeenLastCalledWith(false);
+  });
+
+  it('does not repeat the native call for playback updates', () => {
+    const env = load();
+    env.settings.setState({ hapticsMode: 'system' });
+    startPlaying(env);
+    const calls = env.system.setSystemHapticsEnabled.mock.calls.length;
+    env.player.setState({ position: 4 });
+    env.player.setState({ playbackState: 'paused' });
+    expect(env.system.setSystemHapticsEnabled.mock.calls.length).toBe(calls);
   });
 });

@@ -50,6 +50,7 @@ export function SettingsPlaybackScreen() {
   const crossfadeDurationMs = playbackSettingsStore((s) => s.crossfadeDurationMs);
   const replayGainMode = playbackSettingsStore((s) => s.replayGainMode);
   const musicHaptics = playbackSettingsStore((s) => s.musicHaptics);
+  const hapticsMode = playbackSettingsStore((s) => s.hapticsMode);
   const hapticsBluetoothDelayMs = playbackSettingsStore((s) => s.hapticsBluetoothDelayMs);
   const showSemitoneControls = playbackSettingsStore((s) => s.showSemitoneControls);
   const semitoneStep = playbackSettingsStore((s) => s.semitoneStep);
@@ -75,6 +76,7 @@ export function SettingsPlaybackScreen() {
     crossfadeDurationMs === 5000 &&
     replayGainMode === 'off' &&
     !musicHaptics &&
+    hapticsMode === 'beat' &&
     hapticsBluetoothDelayMs === 0 &&
     !showSemitoneControls &&
     semitoneStep === 1 &&
@@ -107,6 +109,7 @@ export function SettingsPlaybackScreen() {
         s.setCrossfadeDurationMs(5000);
         s.setReplayGainMode('off');
         s.setMusicHaptics(false);
+        s.setHapticsMode('beat');
         s.setHapticsBluetoothDelayMs(0);
         s.setShowSemitoneControls(false);
         s.setSemitoneStep(1);
