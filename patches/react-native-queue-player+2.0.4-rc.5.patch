@@ -1,0 +1,202 @@
+diff --git a/node_modules/react-native-queue-player/android/src/main/java/com/margelo/nitro/queueplayer/AudioPipelineRenderersFactory.kt b/node_modules/react-native-queue-player/android/src/main/java/com/margelo/nitro/queueplayer/AudioPipelineRenderersFactory.kt
+index ec5dd8f..6ee5bba 100644
+--- a/node_modules/react-native-queue-player/android/src/main/java/com/margelo/nitro/queueplayer/AudioPipelineRenderersFactory.kt
++++ b/node_modules/react-native-queue-player/android/src/main/java/com/margelo/nitro/queueplayer/AudioPipelineRenderersFactory.kt
+@@ -5,6 +5,7 @@ import androidx.media3.common.audio.AudioProcessorChain
+ import androidx.media3.common.util.UnstableApi
+ import androidx.media3.exoplayer.DefaultRenderersFactory
+ import androidx.media3.exoplayer.audio.AudioSink
++import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider
+ import androidx.media3.exoplayer.audio.DefaultAudioSink
+ 
+ /**
+@@ -49,7 +50,13 @@ internal class AudioPipelineRenderersFactory(
+     // `setEnableAudioOutputPlaybackParameters` — same boolean, broader
+     // scope (controls output-level rather than AudioTrack-only
+     // playback params).
++    // Default AudioTrack output, plus a hook that lets system haptics unmute the
++    // haptic channels when the app has switched them on.
++    val outputProvider = AudioTrackAudioOutputProvider.Builder(context)
++      .setAudioTrackBuilderModifier { builder, _ -> SystemHaptics.configureAudioTrack(builder) }
++      .build()
+     return DefaultAudioSink.Builder(context)
++      .setAudioOutputProvider(outputProvider)
+       .setAudioProcessorChain(audioProcessorChain)
+       .setEnableFloatOutput(enableFloatOutput)
+       .setEnableAudioOutputPlaybackParameters(enableAudioTrackPlaybackParams)
+diff --git a/node_modules/react-native-queue-player/android/src/main/java/com/margelo/nitro/queueplayer/PlaybackService.kt b/node_modules/react-native-queue-player/android/src/main/java/com/margelo/nitro/queueplayer/PlaybackService.kt
+index 52304d2..aa22e1c 100644
+--- a/node_modules/react-native-queue-player/android/src/main/java/com/margelo/nitro/queueplayer/PlaybackService.kt
++++ b/node_modules/react-native-queue-player/android/src/main/java/com/margelo/nitro/queueplayer/PlaybackService.kt
+@@ -705,6 +705,7 @@ class PlaybackService : HeadlessJsMediaService() {
+     setActiveEngine(engine)
+     Equalizer.current?.wireToPlaybackEngine(engine)
+     Visualizer.current?.wireToPlaybackEngine(engine)
++    SystemHaptics.wire(this, engine)
+   }
+ 
+   /**
+@@ -971,6 +972,7 @@ class PlaybackService : HeadlessJsMediaService() {
+     setActiveEngine(engine)
+     Equalizer.current?.wireToPlaybackEngine(engine)
+     Visualizer.current?.wireToPlaybackEngine(engine)
++    SystemHaptics.wire(this, engine)
+     oldEngine.release()
+     return newEngine
+   }
+@@ -1100,6 +1102,7 @@ class PlaybackService : HeadlessJsMediaService() {
+     setActiveEngine(null)
+     Equalizer.current?.unwireFromPlaybackEngine()
+     Visualizer.current?.unwireFromPlaybackEngine()
++    SystemHaptics.unwire()
+     audioFocusListenerHost?.removeListener(audioFocusListener)
+     audioFocusListenerHost = null
+     castBindScope.cancel()
+diff --git a/node_modules/react-native-queue-player/android/src/main/java/com/margelo/nitro/queueplayer/SystemHaptics.kt b/node_modules/react-native-queue-player/android/src/main/java/com/margelo/nitro/queueplayer/SystemHaptics.kt
+new file mode 100644
+index 0000000..5fbb5be
+--- /dev/null
++++ b/node_modules/react-native-queue-player/android/src/main/java/com/margelo/nitro/queueplayer/SystemHaptics.kt
+@@ -0,0 +1,142 @@
++package com.margelo.nitro.queueplayer
++
++import android.content.Context
++import android.content.SharedPreferences
++import android.media.AudioAttributes
++import android.media.AudioTrack
++import android.media.audiofx.AudioEffect
++import android.media.audiofx.HapticGenerator
++import android.os.Build
++import android.util.Log
++import androidx.media3.common.C
++
++/**
++ * Android's system haptics (`HapticGenerator`, API 31+): turns the played audio into
++ * vibration inside the audio pipeline, the way a native music app can.
++ *
++ * The app switches it on and reads the result through the shared preferences file
++ * [PREFS] (written by the app's own native module): [KEY_ENABLED] in, [KEY_STATUS] out.
++ * While enabled, a generator is attached to every audio session the engine reports,
++ * and new AudioTracks are created with haptic channels unmuted ([configureAudioTrack]);
++ * Media3 does not unmute them, and the effect has nothing to play without that.
++ */
++internal object SystemHaptics {
++  const val PREFS = "musicode_system_haptics"
++  const val KEY_ENABLED = "enabled"
++  const val KEY_STATUS = "status"
++
++  private const val LOG_TAG = "SystemHaptics"
++
++  private val lock = Any()
++  private val generators = HashMap<Int, HapticGenerator>()
++  private var prefs: SharedPreferences? = null
++  private var sessionIds = IntArray(0)
++  private var unsubscribe: (() -> Unit)? = null
++
++  @Volatile
++  private var enabled = false
++
++  // SharedPreferences holds listeners weakly, so this has to stay referenced here.
++  private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
++    if (key == KEY_ENABLED) {
++      enabled = prefs?.getBoolean(KEY_ENABLED, false) ?: false
++      sync()
++    }
++  }
++
++  /** Follow [engine]'s audio sessions; call again when the engine is replaced. */
++  fun wire(context: Context, engine: PlaybackEngine) {
++    synchronized(lock) {
++      if (prefs == null) {
++        val sharedPrefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
++        prefs = sharedPrefs
++        enabled = sharedPrefs.getBoolean(KEY_ENABLED, false)
++        sharedPrefs.registerOnSharedPreferenceChangeListener(prefsListener)
++      }
++      unsubscribe?.invoke()
++      unsubscribe = engine.addAudioSessionIdListener { ids ->
++        synchronized(lock) {
++          sessionIds = ids.filter { it != C.AUDIO_SESSION_ID_UNSET }.toIntArray()
++          sync()
++        }
++      }
++    }
++  }
++
++  fun unwire() {
++    synchronized(lock) {
++      unsubscribe?.invoke()
++      unsubscribe = null
++      sessionIds = IntArray(0)
++      releaseAll()
++      setStatus("off")
++    }
++  }
++
++  /** AudioTrack builder hook: unmute haptic channels while system haptics is on. */
++  fun configureAudioTrack(builder: AudioTrack.Builder) {
++    if (!enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
++    builder.setAudioAttributes(
++      AudioAttributes.Builder()
++        .setUsage(AudioAttributes.USAGE_MEDIA)
++        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
++        .setHapticChannelsMuted(false)
++        .build(),
++    )
++  }
++
++  private fun sync() {
++    synchronized(lock) {
++      if (!enabled) {
++        releaseAll()
++        setStatus("off")
++        return
++      }
++      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || !HapticGenerator.isAvailable()) {
++        releaseAll()
++        setStatus("unsupported")
++        return
++      }
++      generators.keys.filter { it !in sessionIds }.forEach { id ->
++        generators.remove(id)?.release()
++      }
++      var failure: String? = null
++      for (id in sessionIds) {
++        if (generators.containsKey(id)) continue
++        try {
++          val generator = HapticGenerator.create(id)
++          if (generator == null) {
++            failure = "no-generator"
++            continue
++          }
++          val result = generator.setEnabled(true)
++          if (result != AudioEffect.SUCCESS) {
++            generator.release()
++            failure = "enable-failed:$result"
++            continue
++          }
++          generators[id] = generator
++        } catch (e: Exception) {
++          Log.w(LOG_TAG, "HapticGenerator attach failed for session $id", e)
++          failure = "error:${e.javaClass.simpleName}"
++        }
++      }
++      setStatus(
++        when {
++          generators.isNotEmpty() -> "attached:${generators.size}"
++          sessionIds.isEmpty() -> "waiting"
++          else -> failure ?: "failed"
++        },
++      )
++    }
++  }
++
++  private fun releaseAll() {
++    generators.values.forEach { it.release() }
++    generators.clear()
++  }
++
++  private fun setStatus(value: String) {
++    prefs?.edit()?.putString(KEY_STATUS, value)?.apply()
++  }
++}

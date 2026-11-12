@@ -74,6 +74,7 @@ module.exports = {
     'modules/expo-gzip/src/index.ts',
     'modules/expo-move-to-back/src/index.ts',
     'modules/expo-scroll-to-top/src/index.ts',
+    'modules/expo-system-haptics/src/index.ts',
     'modules/expo-ssl-trust/src/ExpoSslTrust.ts',
     'modules/subsonic-api/src/index.ts',
     'modules/subsonic-api/src/utils.ts',

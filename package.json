@@ -75,6 +75,7 @@
     "expo-scroll-to-top": "file:./modules/expo-scroll-to-top",
     "expo-sharing": "~57.0.7",
     "expo-ssl-trust": "file:./modules/expo-ssl-trust",
+    "expo-system-haptics": "file:./modules/expo-system-haptics",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.1",
     "fastest-levenshtein": "^1.0.16",
@@ -145,6 +146,7 @@
           "expo-move-to-back",
           "expo-scroll-to-top",
           "expo-ssl-trust",
+          "expo-system-haptics",
           "react-native-nitro-modules",
           "react-native-queue-player",
           "subsonic-api"
