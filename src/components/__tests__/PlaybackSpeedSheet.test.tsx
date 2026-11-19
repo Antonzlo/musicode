@@ -33,8 +33,19 @@ jest.mock('../../services/playerService', () => ({
 
 jest.mock('../../utils/haptics', () => ({ selectionAsync: jest.fn() }));
 
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+
+const mockSystemAvailable = jest.fn(() => false);
+const mockSystemStatus = jest.fn(() => 'off');
+jest.mock('expo-system-haptics', () => ({
+  isSystemHapticsAvailable: () => mockSystemAvailable(),
+  getSystemHapticsStatus: () => mockSystemStatus(),
+}));
+
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { Switch } from 'react-native';
 
 import { applyPlaybackRate } from '../../services/playerService';
 import {
@@ -50,7 +61,12 @@ beforeEach(() => {
     playbackRatePresets: [...DEFAULT_PLAYBACK_RATE_PRESETS],
     showSemitoneControls: false,
     semitoneStep: 1,
+    musicHaptics: false,
+    hapticsMode: 'beat',
+    hapticsBluetoothDelayMs: 0,
   });
+  mockSystemAvailable.mockReturnValue(false);
+  mockSystemStatus.mockReturnValue('off');
 });
 
 function renderSheet() {
@@ -136,6 +152,69 @@ describe('PlaybackSpeedSheet', () => {
       act(() => playbackSettingsStore.setState({ playbackRate: 0.5 }));
       rerender(<PlaybackSpeedSheet visible onClose={() => {}} />);
       expect(getByText('-12.00st')).toBeTruthy();
+    });
+  });
+
+  describe('music haptics', () => {
+    it('shows the switch, off by default, with nothing else', () => {
+      const { getByText, queryByText } = renderSheet();
+      expect(getByText('Vibrate to the beat')).toBeTruthy();
+      expect(queryByText('Bluetooth delay')).toBeNull();
+      expect(queryByText('Beat pulses')).toBeNull();
+    });
+
+    it('turning it on stores it and offers the Bluetooth delay', () => {
+      const { UNSAFE_getByType, getByText, getByLabelText } = renderSheet();
+      fireEvent(UNSAFE_getByType(Switch), 'valueChange', true);
+      expect(playbackSettingsStore.getState().musicHaptics).toBe(true);
+      expect(getByText('Bluetooth delay')).toBeTruthy();
+      fireEvent(getByLabelText('Bluetooth delay'), 'valueChange', 300);
+      expect(playbackSettingsStore.getState().hapticsBluetoothDelayMs).toBe(300);
+      expect(getByText('300 ms')).toBeTruthy();
+    });
+
+    it('has no mode choice where the system generator is missing', () => {
+      playbackSettingsStore.setState({ musicHaptics: true });
+      const { queryByText } = renderSheet();
+      expect(queryByText('System haptics')).toBeNull();
+    });
+
+    describe('where the system generator exists', () => {
+      beforeEach(() => {
+        mockSystemAvailable.mockReturnValue(true);
+        playbackSettingsStore.setState({ musicHaptics: true });
+      });
+
+      it('offers both modes and switches to the system generator', () => {
+        const { getByText, queryByText } = renderSheet();
+        expect(getByText('Beat pulses')).toBeTruthy();
+        fireEvent.press(getByText('System haptics'));
+        expect(playbackSettingsStore.getState().hapticsMode).toBe('system');
+        expect(queryByText('Bluetooth delay')).toBeNull();
+      });
+
+      it('shows the system status in system mode', () => {
+        playbackSettingsStore.setState({ hapticsMode: 'system' });
+        mockSystemStatus.mockReturnValue('attached:1');
+        const { getByText } = renderSheet();
+        expect(getByText('Status')).toBeTruthy();
+        expect(getByText('Active')).toBeTruthy();
+      });
+
+      it('goes back to beat pulses', () => {
+        playbackSettingsStore.setState({ hapticsMode: 'system' });
+        const { getByText } = renderSheet();
+        fireEvent.press(getByText('Beat pulses'));
+        expect(playbackSettingsStore.getState().hapticsMode).toBe('beat');
+      });
+    });
+
+    it('links to the full playback settings and closes the sheet', () => {
+      const onClose = jest.fn();
+      const { getByLabelText } = render(<PlaybackSpeedSheet visible onClose={onClose} />);
+      fireEvent.press(getByLabelText('Sound & Playback'));
+      expect(onClose).toHaveBeenCalled();
+      expect(mockPush).toHaveBeenCalledWith('/settings-playback');
     });
   });
 });

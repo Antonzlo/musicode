@@ -1,9 +1,9 @@
 import Slider from '@react-native-community/slider';
-import { getSystemHapticsStatus, isSystemHapticsAvailable } from 'expo-system-haptics';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
+import { systemHapticsStatusKey, useSystemHaptics } from '../../hooks/useSystemHaptics';
 import { useTheme } from '../../hooks/useTheme';
 import { settingsStyles } from '../../styles/settingsStyles';
 import {
@@ -14,17 +14,6 @@ import {
 } from '../../store/playbackSettingsStore';
 import { DropdownRow, type DropdownOption } from './DropdownRow';
 import { SettingsSectionTitle } from './SettingsSectionTitle';
-
-const STATUS_POLL_MS = 1000;
-
-/** The native status as a user-facing line. */
-function statusLabelKey(status: string): string {
-  if (status.startsWith('attached')) return 'systemHapticsActive';
-  if (status === 'off') return 'systemHapticsOff';
-  if (status === 'unsupported') return 'systemHapticsUnsupported';
-  if (status === 'waiting') return 'systemHapticsWaiting';
-  return 'systemHapticsProblem';
-}
 
 export function MusicHapticsCard() {
   const { t } = useTranslation();
@@ -37,7 +26,8 @@ export function MusicHapticsCard() {
   const setDelayMs = playbackSettingsStore((s) => s.setHapticsBluetoothDelayMs);
 
   // System haptics needs Android 12+ and a device that supports audio-coupled haptics.
-  const systemAvailable = useMemo(() => isSystemHapticsAvailable(), []);
+  const systemMode = musicHaptics && mode === 'system';
+  const { available: systemAvailable, status } = useSystemHaptics(systemMode);
   const modeOptions: DropdownOption<HapticsMode>[] = useMemo(
     () => [
       { value: 'beat', label: t('hapticsModeBeat') },
@@ -45,16 +35,6 @@ export function MusicHapticsCard() {
     ],
     [t, systemAvailable],
   );
-
-  // The player reports what it did a moment after a change, so follow it.
-  const systemMode = musicHaptics && mode === 'system';
-  const [status, setStatus] = useState(() => getSystemHapticsStatus());
-  useEffect(() => {
-    if (!systemMode) return undefined;
-    setStatus(getSystemHapticsStatus());
-    const timer = setInterval(() => setStatus(getSystemHapticsStatus()), STATUS_POLL_MS);
-    return () => clearInterval(timer);
-  }, [systemMode]);
 
   return (
     <View style={settingsStyles.section}>
@@ -89,7 +69,7 @@ export function MusicHapticsCard() {
           <View style={styles.sliderSection}>
             <View style={styles.sliderHeader}>
               <Text style={[styles.label, { color: colors.textPrimary }]}>{t('systemHapticsStatus')}</Text>
-              <Text style={[styles.label, { color: colors.primary }]}>{t(statusLabelKey(status))}</Text>
+              <Text style={[styles.label, { color: colors.primary }]}>{t(systemHapticsStatusKey(status))}</Text>
             </View>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>{t('systemHapticsHint')}</Text>
           </View>
